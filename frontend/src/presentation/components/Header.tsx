@@ -3,6 +3,7 @@ import {
   RiHomeLine,
   RiFileListLine,
   RiBillLine,
+  RiWallet3Line,
   RiUploadCloud2Line,
   RiSettings3Line,
   RiLogoutBoxRLine,
@@ -10,12 +11,13 @@ import {
 import { useAuth } from '@/state/auth-context'
 import { Button } from '@/presentation/components/ui/button'
 
-export type Screen = 'resumo' | 'lancamentos' | 'fatura' | 'importar' | 'configuracoes'
+export type Screen = 'resumo' | 'lancamentos' | 'fatura' | 'renda' | 'importar' | 'configuracoes'
 
 const NAV_ITEMS: { screen: Screen; label: string; path: string; icon: typeof RiHomeLine }[] = [
   { screen: 'resumo', label: 'Resumo', path: '/', icon: RiHomeLine },
   { screen: 'lancamentos', label: 'Lançamentos', path: '/lancamentos', icon: RiFileListLine },
   { screen: 'fatura', label: 'Fatura', path: '/fatura', icon: RiBillLine },
+  { screen: 'renda', label: 'Renda', path: '/renda', icon: RiWallet3Line },
   { screen: 'importar', label: 'Importar', path: '/importar', icon: RiUploadCloud2Line },
 ]
 

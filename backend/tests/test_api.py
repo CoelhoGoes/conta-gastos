@@ -216,7 +216,7 @@ class TestTrend:
         campos = set(client.get("/trend?months=1&until=2026-09", headers=h).json()[0])
         assert campos == {
             "month", "monthly_income", "extra_income", "cash_expenses",
-            "invoice", "total_spent", "month_balance", "available_balance",
+            "invoice", "total_spent", "month_balance", "available_balance", "income_payments",
         }
 
     def test_nao_mistura_lancamento_de_outro_usuario(self, client, auth):
@@ -227,83 +227,195 @@ class TestTrend:
         assert serie[0]["total_spent"] == "0"
 
 
-class TestRenda:
-    """Histórico da renda: cada renda vale do seu mês até a próxima registrada."""
+def _renda(start="2026-01-01", end=None, *parts):
+    """Corpo de uma renda. Sem partes, uma só: R$ 5.000 no 5º dia útil."""
+    return {
+        "start": start, "end": end,
+        "parts": list(parts) or [{"amount": "5000.00", "rule": "dia_util", "day": 5}],
+    }
 
-    def test_registrar_lista_em_ordem_de_mes(self, client, auth):
+
+class TestRenda:
+    """Renda fixa: cada renda tem período e partes, e várias podem valer ao mesmo tempo."""
+
+    def test_criar_e_listar_em_ordem_de_inicio(self, client, auth):
+        """UC1: a renda volta com a próxima data de cada parte."""
         h = auth()
-        assert client.put("/incomes/2026-09", headers=h, json={"amount": "5000.00"}).json() == {
-            "month": "2026-09", "amount": "5000.00",
-        }
-        client.put("/incomes/2026-03", headers=h, json={"amount": "4000.00"})
-        assert [i["month"] for i in client.get("/incomes", headers=h).json()] == [
-            "2026-03", "2026-09",
+        r = client.post("/incomes", headers=h, json=_renda("2026-09-01"))
+        assert r.status_code == 201
+        assert r.json()["parts"][0]["rule"] == "dia_util"
+        client.post("/incomes", headers=h, json=_renda("2026-03-01", "2026-08-31"))
+        lista = client.get("/incomes?today=2026-10-31", headers=h).json()
+        assert [i["start"] for i in lista] == ["2026-03-01", "2026-09-01"]
+        assert lista[0]["parts"][0]["next_date"] is None  # encerrada
+        assert lista[1]["parts"][0]["next_date"] == "2026-11-06"
+
+    def test_partes_e_mes_seguinte_chegam_ao_resumo(self, client, auth):
+        """UC2/UC3/UC4: vale no dia 15 e o resto no último dia útil, contando no mês seguinte."""
+        h = auth()
+        client.post("/incomes", headers=h, json=_renda(
+            "2026-10-01", None,
+            {"amount": "2000.00", "rule": "dia_fixo", "day": 15},
+            {"amount": "3000.00", "rule": "ultimo_dia_util", "next_month": True},
+        ))
+        out, nov = (client.get(f"/summary/{m}", headers=h).json() for m in ("2026-10", "2026-11"))
+        assert out["monthly_income"] == "2000.00"
+        assert nov["monthly_income"] == "5000.00"
+        assert nov["income_payments"] == [
+            {"date": "2026-10-30", "amount": "3000.00", "next_month": True},
+            {"date": "2026-11-13", "amount": "2000.00", "next_month": False},  # 15/11 é domingo
         ]
 
-    def test_o_mesmo_mes_duas_vezes_substitui(self, client, auth):
-        """F6: vale a última, não ficam duas."""
+    def test_mudar_a_renda_encerra_a_antiga_e_comeca_outra(self, client, auth):
+        """UC5/UC9/UC11: cada renda soma no seu período."""
         h = auth()
-        client.put("/incomes/2026-09", headers=h, json={"amount": "5000.00"})
-        client.put("/incomes/2026-09", headers=h, json={"amount": "6000.00"})
-        assert client.get("/incomes", headers=h).json() == [{"month": "2026-09", "amount": "6000.00"}]
-
-    def test_renda_muda_o_resumo_a_partir_do_mes(self, client, auth):
-        """UC5: os meses anteriores ficam com a renda anterior."""
-        h = auth()
-        client.put("/incomes/2026-08", headers=h, json={"amount": "1000.00"})
-        client.put("/incomes/2026-10", headers=h, json={"amount": "2000.00"})
+        um = {"amount": "1000.00", "rule": "dia_fixo", "day": 10}
+        dois = {"amount": "2000.00", "rule": "dia_fixo", "day": 10}
+        client.post("/incomes", headers=h, json=_renda("2026-08-01", "2026-09-30", um))
+        client.post("/incomes", headers=h, json=_renda("2026-10-01", None, dois))
         serie = client.get("/trend?months=4&until=2026-10", headers=h).json()
         assert [s["monthly_income"] for s in serie] == ["0", "1000.00", "1000.00", "2000.00"]
         assert [s["available_balance"] for s in serie] == ["0", "1000.00", "2000.00", "4000.00"]
 
-    def test_apagar_volta_a_renda_anterior(self, client, auth):
-        """UC5b."""
+    def test_rendas_sobrepostas_somam(self, client, auth):
+        """UC11."""
         h = auth()
-        client.put("/incomes/2026-08", headers=h, json={"amount": "1000.00"})
-        client.put("/incomes/2026-10", headers=h, json={"amount": "2000.00"})
-        assert client.delete("/incomes/2026-10", headers=h).status_code == 204
-        assert client.get("/summary/2026-10", headers=h).json()["monthly_income"] == "1000.00"
+        client.post("/incomes", headers=h, json=_renda("2026-01-01"))
+        client.post("/incomes", headers=h, json=_renda(
+            "2026-01-01", None, {"amount": "800.00", "rule": "dia_fixo", "day": 20}))
+        assert client.get("/summary/2026-10", headers=h).json()["monthly_income"] == "5800.00"
 
-    def test_apagar_mes_sem_renda_e_404(self, client, auth):
-        assert client.delete("/incomes/2026-10", headers=auth()).status_code == 404
-
-    # 0000 e 0001: fora de 1900–2199, o acumulado andaria séculos (revisão de segurança)
-    @pytest.mark.parametrize("mes", ["2026-13", "2026-9", "setembro", "0000-01", "0001-01", "2200-01"])
-    def test_mes_invalido_e_recusado(self, client, auth, mes):
-        """F5."""
+    def test_editar_substitui_a_renda_inteira(self, client, auth):
+        """UC8/F11: as partes antigas saem, as novas entram, numa troca só."""
         h = auth()
-        assert client.put(f"/incomes/{mes}", headers=h, json={"amount": "10.00"}).status_code == 422
+        renda = client.post("/incomes", headers=h, json=_renda(
+            "2026-01-01", None,
+            {"amount": "1000.00", "rule": "dia_fixo", "day": 10},
+            {"amount": "2000.00", "rule": "dia_fixo", "day": 20},
+        )).json()
+        r = client.put(f"/incomes/{renda['id']}", headers=h, json=_renda(
+            "2026-02-01", "2026-12-31", {"amount": "4000.00", "rule": "ultimo_dia_util"}))
+        assert r.status_code == 200
+        [atual] = client.get("/incomes", headers=h).json()
+        assert (atual["start"], atual["end"]) == ("2026-02-01", "2026-12-31")
+        assert [p["amount"] for p in atual["parts"]] == ["4000.00"]
+
+    def test_edicao_invalida_nao_muda_nada(self, client, auth):
+        """F11: um corpo recusado não deixa a renda pela metade."""
+        h = auth()
+        renda = client.post("/incomes", headers=h, json=_renda()).json()
+        r = client.put(f"/incomes/{renda['id']}", headers=h, json=_renda(
+            "2026-01-01", None, {"amount": "1.00", "rule": "dia_fixo", "day": 40}))
+        assert r.status_code == 422
+        assert client.get("/incomes", headers=h).json()[0]["parts"][0]["amount"] == "5000.00"
+
+    def test_apagar_nao_estende_outra_renda(self, client, auth):
+        """UC6."""
+        h = auth()
+        client.post("/incomes", headers=h, json=_renda("2026-01-01", "2026-09-30"))
+        nova = client.post("/incomes", headers=h, json=_renda("2026-10-01")).json()
+        assert client.delete(f"/incomes/{nova['id']}", headers=h).status_code == 204
+        assert client.get("/summary/2026-10", headers=h).json()["monthly_income"] == "0"
+
+    def test_renda_identica_pede_confirmacao(self, client, auth):
+        """F10: 409, e com allow_duplicate a segunda entra."""
+        h = auth()
+        client.post("/incomes", headers=h, json=_renda())
+        r = client.post("/incomes", headers=h, json=_renda())
+        assert r.status_code == 409
+        assert r.json()["detail"] == "Essa renda já foi registrada."
+        assert len(client.get("/incomes", headers=h).json()) == 1
+        assert client.post("/incomes?allow_duplicate=true", headers=h, json=_renda()).status_code == 201
+        assert len(client.get("/incomes", headers=h).json()) == 2
+
+    def test_partes_em_outra_ordem_tambem_e_duplicata(self, client, auth):
+        h = auth()
+        a = {"amount": "1000.00", "rule": "dia_fixo", "day": 10}
+        b = {"amount": "2000.00", "rule": "ultimo_dia_util"}
+        client.post("/incomes", headers=h, json=_renda("2026-01-01", None, a, b))
+        assert client.post("/incomes", headers=h, json=_renda("2026-01-01", None, b, a)).status_code == 409
+
+    def test_editar_para_ficar_igual_a_outra_pede_confirmacao(self, client, auth):
+        h = auth()
+        client.post("/incomes", headers=h, json=_renda())
+        outra = client.post("/incomes", headers=h, json=_renda("2026-05-01")).json()
+        assert client.put(f"/incomes/{outra['id']}", headers=h, json=_renda()).status_code == 409
+        # salvar a própria renda sem mudar nada não é duplicata dela mesma
+        assert client.put(f"/incomes/{outra['id']}", headers=h, json=_renda("2026-05-01")).status_code == 200
+
+    @pytest.mark.parametrize("parte", [
+        {"amount": "0", "rule": "dia_fixo", "day": 10},                 # F1
+        {"amount": "-1.00", "rule": "dia_fixo", "day": 10},             # F1
+        {"amount": "1.001", "rule": "dia_fixo", "day": 10},             # F1
+        {"amount": "10000000000.00", "rule": "dia_fixo", "day": 10},    # F1, acima da coluna
+        {"amount": "1.00", "rule": "dia_fixo", "day": 0},               # F2
+        {"amount": "1.00", "rule": "dia_fixo", "day": 32},              # F2
+        {"amount": "1.00", "rule": "dia_fixo"},                         # F2, sem dia
+        {"amount": "1.00", "rule": "dia_util", "day": 24},              # F4
+        {"amount": "1.00", "rule": "ultimo_dia_util", "day": 5},        # dia sobrando
+        {"amount": "1.00", "rule": "toda_sexta", "day": 5},             # regra que não existe
+    ])
+    def test_parte_invalida_e_recusada(self, client, auth, parte):
+        h = auth()
+        assert client.post("/incomes", headers=h, json=_renda("2026-01-01", None, parte)).status_code == 422
         assert client.get("/incomes", headers=h).json() == []
 
-    def test_renda_negativa_e_recusada(self, client, auth):
-        """F8."""
-        r = client.put("/incomes/2026-09", headers=auth(), json={"amount": "-1.00"})
+    def test_parte_no_limite_e_aceita(self, client, auth):
+        r = client.post("/incomes", headers=auth(), json=_renda(
+            "2026-01-01", None,
+            {"amount": "9999999999.99", "rule": "dia_util", "day": 23},
+            {"amount": "1.00", "rule": "dia_fixo", "day": 31},
+        ))
+        assert r.status_code == 201
+
+    def test_sem_partes_ou_com_partes_demais_e_recusada(self, client, auth):
+        """F6."""
+        h = auth()
+        cinco = [{"amount": "1.00", "rule": "dia_fixo", "day": d} for d in range(1, 6)]
+        assert client.post("/incomes", headers=h, json={"start": "2026-01-01", "parts": []}).status_code == 422
+        assert client.post("/incomes", headers=h, json={"start": "2026-01-01", "parts": cinco}).status_code == 422
+
+    def test_duas_partes_na_mesma_regra_sao_recusadas(self, client, auth):
+        """F13."""
+        p = {"amount": "1.00", "rule": "dia_fixo", "day": 10}
+        r = client.post("/incomes", headers=auth(), json=_renda("2026-01-01", None, p, p))
         assert r.status_code == 422
 
-    def test_renda_acima_da_coluna_e_recusada_e_nao_500(self, client, auth):
-        r = client.put("/incomes/2026-09", headers=auth(), json={"amount": "10000000000.00"})
-        assert r.status_code == 422
+    @pytest.mark.parametrize("start,end", [
+        ("2026-05-01", "2026-04-30"),   # F14
+        ("1899-12-31", None),
+        ("2026-01-01", "2200-01-01"),
+    ])
+    def test_periodo_invalido_e_recusado(self, client, auth, start, end):
+        assert client.post("/incomes", headers=auth(), json=_renda(start, end)).status_code == 422
 
-    def test_renda_no_limite_da_coluna_e_aceita(self, client, auth):
-        r = client.put("/incomes/2026-09", headers=auth(), json={"amount": "9999999999.99"})
-        assert r.status_code == 200
+    def test_today_fora_do_intervalo_e_recusado(self, client, auth):
+        assert client.get("/incomes?today=0001-01-01", headers=auth()).status_code == 422
 
-    def test_renda_zero_e_aceita(self, client, auth):
-        """F7."""
-        assert client.put("/incomes/2026-09", headers=auth(), json={"amount": "0"}).status_code == 200
+    def test_editar_ou_apagar_renda_que_nao_existe_e_404(self, client, auth):
+        """F15."""
+        h = auth()
+        renda = client.post("/incomes", headers=h, json=_renda()).json()
+        client.delete(f"/incomes/{renda['id']}", headers=h)
+        assert client.put(f"/incomes/{renda['id']}", headers=h, json=_renda()).status_code == 404
+        assert client.delete(f"/incomes/{renda['id']}", headers=h).status_code == 404
 
-    def test_uma_conta_nao_ve_nem_apaga_a_renda_da_outra(self, client, auth):
+    def test_uma_conta_nao_ve_nem_mexe_na_renda_da_outra(self, client, auth):
+        """F9."""
         ana = auth(email="ana@b.co")
         bia = auth(email="bia@b.co")
-        client.put("/incomes/2026-09", headers=ana, json={"amount": "5000.00"})
+        renda = client.post("/incomes", headers=ana, json=_renda()).json()
         assert client.get("/incomes", headers=bia).json() == []
-        assert client.delete("/incomes/2026-09", headers=bia).status_code == 404
+        assert client.put(f"/incomes/{renda['id']}", headers=bia, json=_renda()).status_code == 404
+        assert client.delete(f"/incomes/{renda['id']}", headers=bia).status_code == 404
         assert client.get("/summary/2026-09", headers=bia).json()["available_balance"] == "0"
         assert len(client.get("/incomes", headers=ana).json()) == 1
 
     def test_sem_sessao_e_401(self, client):
         assert client.get("/incomes").status_code == 401
-        assert client.put("/incomes/2026-09", json={"amount": "1.00"}).status_code == 401
+        assert client.post("/incomes", json=_renda()).status_code == 401
+        assert client.put("/incomes/1", json=_renda()).status_code == 401
+        assert client.delete("/incomes/1").status_code == 401
 
     def test_auth_me_nao_tem_mais_renda(self, client, auth):
         h = auth()
@@ -659,7 +771,7 @@ class TestEdicao:
     def test_lancamento_inexistente_responde_404(self, client, auth):
         assert client.patch("/entries/999", headers=auth(), json={}).status_code == 404
 
-    @pytest.mark.parametrize("rota", ["/entries/{}"])
+    @pytest.mark.parametrize("rota", ["/entries/{}", "/incomes/{}"])
     def test_id_acima_da_coluna_e_recusado_em_vez_de_500(self, client, auth, rota):
         """O id é `integer` no Postgres: 2**31 estourava a consulta e respondia 500."""
         h = auth()

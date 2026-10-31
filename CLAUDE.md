@@ -123,11 +123,11 @@ frontend/
 ├── vite.config.ts            React + Tailwind v4 plugins, '@' alias → ./src
 └── src/                      layered: presentation → state → data, shared for all
     ├── main.tsx               mounts App inside BrowserRouter + AuthProvider
-    ├── App.tsx                route table only (login/summary/entries/invoice/import/config)
+    ├── App.tsx                route table only (login/summary/entries/invoice/income/import/config)
     ├── index.css              Tailwind v4 import + shadcn theme tokens
     ├── test-setup.ts          vitest setup (jest-dom matchers)
     ├── presentation/
-    │   ├── pages/             one file per screen (Login/Summary/Entry/Invoice/Import/Config)
+    │   ├── pages/             one file per screen (Login/Summary/Entry/Invoice/Income/Import/Config)
     │   └── components/
     │       ├── Page.tsx       authenticated screen shell: navbar + content capped at max-w-6xl
     │       ├── Header.tsx     full-width sticky navbar, used by every authenticated screen
@@ -200,9 +200,9 @@ npm run gen:types  # regenerate src/shared/api-schema.d.ts from the running API
 
 ```bash
 pip install -r backend/requirements-dev.txt   # once
-cd backend && pytest                          # 179 tests (2 skipped on sqlite), ~20s
+cd backend && pytest                          # 221 tests (3 skipped on sqlite), ~30s
 
-cd frontend && npm test                       # 130 tests, ~6s
+cd frontend && npm test                       # 143 tests, ~6s
 ```
 
 `backend/tests/test_service.py` needs no database: `service.py` is pure, so the tests use plain

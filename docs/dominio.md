@@ -25,12 +25,33 @@ guarda também a origem (`import_id`); o que foi digitado tem origem nula.
 por usuário em `/auth/me` ou pela tela de configuração. Aceita de 1 a 28 e vale **25** enquanto
 ninguém mudar.
 
-**Renda mensal** (`monthly_income`) — valor fixo que o usuário declara ganhar por mês. Não é um
-lançamento: é um histórico (tabela `rendas`), em que cada renda vale **a partir de um mês** até
-o mês anterior à próxima registrada. A renda de um mês é a registrada com o maior mês de início
-até ele (`income_for`); antes da primeira, é **0** — uma conta recém-criada mostra saldo como se
-não houvesse renda até alguém registrá-la. Uma renda por conta e mês: registrar de novo no
-mesmo mês substitui. Só mês e ano, sem dia (o dia do pagamento está no `docs/roadmap.md`).
+**Renda mensal** (`monthly_income`) — valor fixo que o usuário declara receber. Não é um
+lançamento: é um histórico (tabelas `rendas` e `partes_renda`), em que cada renda vale de uma
+**data de início** até um **fim opcional**. Rendas podem se sobrepor e se somam; apagar uma não
+estende nenhuma outra. Antes da primeira, a renda é **0** — uma conta recém-criada mostra saldo
+como se não houvesse renda até alguém registrá-la.
+
+Cada renda tem de 1 a 4 **partes** (o salário quebrado em mais de um dia), cada uma com valor
+em reais e uma regra de dia:
+
+- **dia fixo** (1 a 31) — num mês mais curto, vale o último dia do mês;
+- **N-ésimo dia útil** (1 a 23) — contagem da CLT: segunda a sábado contam, domingo e feriado
+  nacional não. 23 é o menor número de dias úteis que um mês já teve;
+- **último dia útil** — sem dia.
+
+A data dada pela regra é a do crédito, então ela **recua para o dia anterior com banco aberto**
+quando cai em fim de semana, feriado nacional, segunda e terça de Carnaval ou Corpus Christi.
+O recuo pode atravessar o mês: dia fixo 2 em nov/2026 vira 30/10. Os feriados vêm da lib
+`holidays` (`_calendar` em `service.py`).
+
+Uma parte conta no mês da regra, ou no **mês seguinte** quando marcada assim — o salário que
+paga as contas do mês que vem. A renda de um mês (`income_payments`) é a soma das partes que
+contam nele cuja data de crédito cai dentro do período da renda. Duas partes com a mesma regra
+e dia na mesma renda são recusadas (seria uma parte só). Registrar uma renda igual a outra
+(mesmo período e partes) responde 409 e só grava com confirmação.
+
+Rendas registradas antes do dia de pagamento existir não têm regra: contam no dia 1 do próprio
+mês, e a tela pede para escolher o dia.
 
 **Conta excluída** — usuário com `excluido_em` preenchido. A exclusão é lógica: a linha e os
 lançamentos continuam no banco, mas a conta some para a API — o token deixa de valer, o login
@@ -95,7 +116,7 @@ dezembro.
 ### Como o saldo é calculado
 
 ```
-saldo do mês     = renda do mês (pelo histórico)
+saldo do mês     = renda do mês (as partes que contam nele)
                  + entradas do mês (lançamentos type=entrada)
                  - gastos à vista do mês (type=gasto, method=avista)
                  - total da fatura que vence no mês
@@ -192,6 +213,10 @@ do cliente.
 Coisas que estão assim de propósito ou por falta de tempo — não são bugs a corrigir sem
 conversar antes.
 
+- **Só feriados nacionais na renda.** A CLT também tira o feriado municipal da contagem de dias
+  úteis, então numa cidade com feriado no começo do mês o 5º dia útil real pode cair um dia
+  depois do mostrado. A lib traz os estaduais, mas a renda não sabe onde a pessoa trabalha.
+  Decidido em 30/10/2026.
 - **A suíte do dia a dia não passa pelas migrações.** O schema pertence ao Alembic, mas o
   `conftest.py` cria as tabelas a partir dos modelos (`create_all`), e as migrações, geradas
   para o Postgres, não rodam em sqlite. Uma mudança em `models.py` sem migração passa na

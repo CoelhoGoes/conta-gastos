@@ -5,6 +5,7 @@ import { SummaryScreen } from '@/presentation/pages/SummaryScreen'
 import { EntryScreen } from '@/presentation/pages/EntryScreen'
 import { InvoiceScreen } from '@/presentation/pages/InvoiceScreen'
 import { ImportScreen } from '@/presentation/pages/ImportScreen'
+import { IncomeScreen } from '@/presentation/pages/IncomeScreen'
 import { ConfigScreen } from '@/presentation/pages/ConfigScreen'
 
 function App() {
@@ -29,6 +30,10 @@ function App() {
       <Route
         path="/fatura"
         element={user ? <InvoiceScreen /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/renda"
+        element={user ? <IncomeScreen /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/importar"

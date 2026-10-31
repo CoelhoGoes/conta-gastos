@@ -5,16 +5,24 @@ from decimal import Decimal
 import pytest
 
 from app.domain.service import (
+    MAX_NTH_BUSINESS_DAY,
     calculate_category_breakdown,
     calculate_invoice,
     calculate_summaries,
     calculate_summary,
-    income_for,
+    income_payments,
     invoice_for_purchase,
     is_income_on_credit,
+    next_payment,
+    payment_date,
     shift_month,
     split_installments,
 )
+
+
+def renda_do_mes(month, incomes):
+    """A renda fixa que conta no mês: a soma dos pagamentos que caem nele."""
+    return sum((p.amount for p in income_payments(month, incomes)), Decimal(0))
 
 
 class TestShiftMonth:
@@ -124,17 +132,130 @@ class TestCalculateSummary:
         assert s.total_spent == Decimal(0)
 
 
-class TestIncomeFor:
-    def test_vale_a_renda_de_inicio_mais_recente_ate_o_mes(self, renda):
-        """UC5: a renda nova vale do seu mês em diante; antes, a anterior."""
-        rendas = [renda("2026-10", "2000.00"), renda("2026-08", "1000.00")]
-        assert income_for("2026-07", rendas) == Decimal(0)
-        assert income_for("2026-08", rendas) == Decimal("1000.00")
-        assert income_for("2026-09", rendas) == Decimal("1000.00")
-        assert income_for("2027-05", rendas) == Decimal("2000.00")
+class TestPaymentDate:
+    """UC4: as datas da pesquisa sobre pagamento de salário (ver o documento da feature)."""
+
+    @pytest.mark.parametrize("ano,mes,esperado", [
+        (2026, 10, date(2026, 10, 6)),   # o sábado 3 conta: terça, 6/10
+        (2026, 11, date(2026, 11, 6)),   # Finados não conta: sábado 7/11, pago na sexta
+        (2026, 12, date(2026, 12, 4)),   # sábado 5/12, pago na sexta
+        (2027, 1, date(2027, 1, 7)),     # 1º de janeiro não conta
+    ])
+    def test_quinto_dia_util_pela_clt(self, ano, mes, esperado):
+        assert payment_date("dia_util", 5, ano, mes) == esperado
+
+    def test_ultimo_dia_util(self):
+        assert payment_date("ultimo_dia_util", None, 2026, 10) == date(2026, 10, 30)
+
+    def test_ultimo_dia_util_com_o_mes_acabando_no_domingo(self):
+        """F5: 31/05/2026 é domingo."""
+        assert payment_date("ultimo_dia_util", None, 2026, 5) == date(2026, 5, 29)
+
+    @pytest.mark.parametrize("dia,ano,mes,esperado", [
+        (10, 2026, 10, date(2026, 10, 9)),   # sábado vira sexta
+        (15, 2026, 11, date(2026, 11, 13)),  # domingo e feriado: sexta
+        (31, 2026, 2, date(2026, 2, 27)),    # fevereiro acaba no sábado 28
+        (31, 2026, 4, date(2026, 4, 30)),    # mês de 30 dias
+        (2, 2026, 11, date(2026, 10, 30)),   # Finados numa segunda: volta para outubro
+        (6, 2026, 10, date(2026, 10, 6)),    # dia útil fica como está
+    ])
+    def test_dia_fixo_antecipa_para_o_dia_com_banco(self, dia, ano, mes, esperado):
+        """F3."""
+        assert payment_date("dia_fixo", dia, ano, mes) == esperado
+
+    def test_carnaval_e_corpus_christi_nao_tem_banco(self):
+        assert payment_date("dia_fixo", 17, 2026, 2) == date(2026, 2, 13)  # terça de Carnaval
+        assert payment_date("dia_fixo", 4, 2026, 6) == date(2026, 6, 3)    # Corpus Christi
+
+    def test_carnaval_conta_como_dia_util_na_clt(self):
+        """O 13º dia útil de fevereiro/2026 é a segunda de Carnaval (se não contasse, seria o
+        dia 18); o banco não abre e o crédito volta para a sexta, 13/02."""
+        assert payment_date("dia_util", 13, 2026, 2) == date(2026, 2, 13)
+
+    def test_todo_mes_tem_o_maior_n_aceito(self):
+        """F4: o limite do N-ésimo dia útil existe em todo mês do intervalo aceito."""
+        for ano in range(1900, 2200):
+            for mes in range(1, 13):
+                payment_date("dia_util", MAX_NTH_BUSINESS_DAY, ano, mes)
+
+
+class TestIncomePayments:
+    def test_renda_dividida_soma_as_partes(self, renda, parte):
+        """UC1/UC2: vale no dia 20 e o resto no 5º dia útil."""
+        r = renda("2026-01", parts=[parte("1000.00", "dia_fixo", 20), parte("3000.00", "dia_util", 5)])
+        pagamentos = income_payments("2026-11", [r])
+        assert [(p.date, p.amount) for p in pagamentos] == [
+            (date(2026, 11, 6), Decimal("3000.00")),
+            (date(2026, 11, 19), Decimal("1000.00")),  # 20/11 é Consciência Negra
+        ]
+        assert renda_do_mes("2026-11", [r]) == Decimal("4000.00")
+
+    def test_parte_do_mes_seguinte(self, renda, parte):
+        """UC3: o pagamento de 30/10 conta em novembro; outubro não recebe o de setembro, que
+        foi antes do início da renda."""
+        r = renda("2026-10", parts=[parte("5000.00", "ultimo_dia_util", next_month=True)])
+        assert renda_do_mes("2026-10", [r]) == Decimal(0)
+        [pagamento] = income_payments("2026-11", [r])
+        assert (pagamento.date, pagamento.next_month) == (date(2026, 10, 30), True)
+
+    def test_troca_para_o_proprio_mes_conta_duas_vezes(self, renda, parte):
+        """F7: os dois pagamentos acontecem de verdade, e outubro recebe os dois."""
+        antiga = renda("2026-01", end="2026-09-30",
+                       parts=[parte("5000.00", "ultimo_dia_util", next_month=True)])
+        nova = renda("2026-10", parts=[parte("5000.00", "dia_util", 5)])
+        assert renda_do_mes("2026-10", [antiga, nova]) == Decimal("10000.00")
+
+    def test_troca_para_o_mes_seguinte_deixa_um_mes_sem_renda(self, renda, parte):
+        """F7, ao contrário."""
+        antiga = renda("2026-01", end="2026-09-30", parts=[parte("5000.00", "dia_util", 5)])
+        nova = renda("2026-10", parts=[parte("5000.00", "ultimo_dia_util", next_month=True)])
+        assert renda_do_mes("2026-10", [antiga, nova]) == Decimal(0)
+        assert renda_do_mes("2026-11", [antiga, nova]) == Decimal("5000.00")
+
+    def test_fim_para_de_somar(self, renda, parte):
+        """UC9: o fim no meio do mês corta só o que cai depois dele."""
+        r = renda("2026-01", end="2026-11-10",
+                  parts=[parte("1000.00", "dia_fixo", 5), parte("3000.00", "dia_fixo", 20)])
+        assert renda_do_mes("2026-11", [r]) == Decimal("1000.00")
+        assert renda_do_mes("2026-12", [r]) == Decimal(0)
+
+    def test_rendas_sobrepostas_somam(self, renda, parte):
+        """UC11."""
+        rendas = [renda("2026-01", "3000.00"), renda("2026-06", "2000.00")]
+        assert renda_do_mes("2026-05", rendas) == Decimal("3000.00")
+        assert renda_do_mes("2026-06", rendas) == Decimal("5000.00")
+
+    def test_renda_antiga_sem_dia_conta_no_proprio_mes(self, renda):
+        """UC10/F8: sem regra, vale o dia 1, que é como a renda funcionava antes."""
+        r = renda("2026-08", "1000.00", end="2026-09-30")
+        assert [renda_do_mes(m, [r]) for m in ("2026-07", "2026-08", "2026-09", "2026-10")] == [
+            Decimal(0), Decimal("1000.00"), Decimal("1000.00"), Decimal(0),
+        ]
+        [pagamento] = income_payments("2026-08", [r])
+        assert pagamento.date is None
 
     def test_sem_renda_registrada_e_zero(self):
-        assert income_for("2026-09", []) == Decimal(0)
+        assert renda_do_mes("2026-09", []) == Decimal(0)
+
+
+class TestNextPayment:
+    def test_proxima_data_a_partir_de_hoje(self, renda, parte):
+        r = renda("2026-01")
+        p = parte("1000.00", "dia_util", 5)
+        assert next_payment(r, p, date(2026, 10, 31)) == date(2026, 11, 6)
+        assert next_payment(r, p, date(2026, 11, 6)) == date(2026, 11, 6)  # o próprio dia
+        assert next_payment(r, p, date(2026, 11, 7)) == date(2026, 12, 4)
+
+    def test_renda_encerrada_nao_tem_proxima(self, renda, parte):
+        r = renda("2026-01", end="2026-10-31")
+        assert next_payment(r, parte("1.00", "dia_util", 5), date(2026, 10, 31)) is None
+
+    def test_renda_que_ainda_vai_comecar(self, renda, parte):
+        r = renda("2027-03")
+        assert next_payment(r, parte("1.00", "dia_fixo", 10), date(2026, 10, 31)) == date(2027, 3, 10)
+
+    def test_parte_sem_regra_nao_tem_data(self, renda, parte):
+        assert next_payment(renda("2026-01"), parte("1.00"), date(2026, 10, 31)) is None
 
 
 class TestSaldoAcumulado:
@@ -182,16 +303,16 @@ class TestSaldoAcumulado:
         assert saldos == [Decimal("3700.00")]  # 4 rendas - 300 de parcelas
 
     def test_renda_nova_muda_so_dali_em_diante(self, user, renda):
-        """UC5."""
-        rendas = [renda("2026-08", "1000.00"), renda("2026-10", "2000.00")]
+        """UC5: a antiga termina e a nova começa."""
+        rendas = [renda("2026-08", "1000.00", end="2026-09-30"), renda("2026-10", "2000.00")]
         assert self._saldos(["2026-09", "2026-10"], user, [], rendas) == [
             Decimal("2000.00"), Decimal("4000.00"),
         ]
 
-    def test_apagar_renda_volta_a_anterior(self, user, renda):
-        """UC5b: sem a de outubro, outubro usa a de agosto."""
-        assert self._saldos(["2026-10"], user, [], [renda("2026-08", "1000.00")]) == [
-            Decimal("3000.00"),
+    def test_apagar_renda_nao_estende_a_anterior(self, user, renda):
+        """UC6: sem a de outubro, outubro fica sem renda — a de agosto já tinha terminado."""
+        assert self._saldos(["2026-10"], user, [], [renda("2026-08", "1000.00", end="2026-09-30")]) == [
+            Decimal("2000.00"),
         ]
 
     def test_lancamento_passado_muda_os_seguintes(self, user, gasto):
@@ -214,10 +335,17 @@ class TestSaldoAcumulado:
             Decimal("600.00"),
         ]
 
-    def test_renda_zero_para_de_somar(self, user, renda):
-        """F7."""
-        rendas = [renda("2026-08", "1000.00"), renda("2026-09", "0")]
+    def test_renda_encerrada_para_de_somar(self, user, renda):
+        """UC9."""
+        rendas = [renda("2026-08", "1000.00", end="2026-08-31")]
         assert self._saldos(["2026-10"], user, [], rendas) == [Decimal("1000.00")]
+
+    def test_resumo_traz_os_pagamentos_do_mes(self, user, renda, parte):
+        """UC4: o resumo diz de onde veio a renda do mês."""
+        r = renda("2026-10", parts=[parte("5000.00", "ultimo_dia_util", next_month=True)])
+        s = calculate_summary("2026-11", user, [], [r])
+        assert s.monthly_income == Decimal("5000.00")
+        assert [(p.date, p.next_month) for p in s.income_payments] == [(date(2026, 10, 30), True)]
 
     def test_sem_renda_nenhuma_so_os_lancamentos_acumulam(self, user, gasto):
         """F7b."""

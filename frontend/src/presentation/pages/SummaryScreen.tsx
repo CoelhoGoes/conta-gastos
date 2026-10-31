@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { RiInformationLine } from '@remixicon/react'
 import { api } from '@/data/api'
-import { currentMonth, formatCurrency, formatPercent } from '@/shared/format'
+import { currentMonth, formatCurrency, formatDayMonth, formatPercent } from '@/shared/format'
 import type { CategoryBreakdown, Summary } from '@/shared/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
 import { Button } from '@/presentation/components/ui/button'
@@ -130,7 +130,7 @@ export function SummaryScreen() {
             variant="outline"
             size="sm"
             className="self-start"
-            onClick={() => navigate('/configuracoes')}
+            onClick={() => navigate('/renda')}
           >
             Informar renda mensal
           </Button>
@@ -165,9 +165,28 @@ export function SummaryScreen() {
               </dl>
 
               <dl className="flex flex-col gap-2 border-t pt-4 text-sm">
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between">
                   <dt className="text-muted-foreground">Renda mensal</dt>
                   <Money value={summary.monthly_income} />
+                  {/* de onde veio a renda: o salário de 30/10 que conta em novembro aparece aqui */}
+                  {summary.income_payments.length > 0 && (
+                    <dd className="mt-1 w-full">
+                      <ul
+                        aria-label="Pagamentos da renda"
+                        className="flex flex-col gap-0.5 pl-3 text-xs text-muted-foreground"
+                      >
+                        {summary.income_payments.map((p, i) => (
+                          <li key={i} className="flex justify-between gap-2">
+                            <span>
+                              {p.date ? formatDayMonth(p.date) : 'Sem dia definido'}
+                              {p.next_month && ' · recebida no mês anterior'}
+                            </span>
+                            <span className="tabular-nums">R$ {formatCurrency(p.amount)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </dd>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Entradas extras</dt>

@@ -11,6 +11,11 @@ type Schemas = components['schemas']
 
 export type User = Schemas['UserOut']
 export type Income = Schemas['IncomeOut']
+export type IncomePart = Schemas['IncomePartOut']
+export type IncomeIn = Schemas['IncomeIn']
+export type IncomePartIn = Schemas['IncomePartIn']
+export type PaydayRule = IncomePartIn['rule']
+export type IncomePayment = Schemas['IncomePayment']
 
 export type EntryCreate = Schemas['EntryCreate']
 export type EntryUpdate = Schemas['EntryUpdate']

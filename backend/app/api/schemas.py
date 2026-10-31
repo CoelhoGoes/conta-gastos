@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from ..domain.service import MAX_NTH_BUSINESS_DAY
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -105,6 +107,15 @@ class CategoryBreakdown(BaseModel):
     items: list[CategoryItem]
 
 
+class IncomePayment(BaseModel):
+    # `datetime.date`: o campo `date` sombreia o tipo (ver EntryUpdate)
+    date: datetime.date | None = Field(
+        description="Quando o dinheiro cai. Nulo para renda registrada antes de existir o dia."
+    )
+    amount: Decimal
+    next_month: bool = Field(description="Pago no mês anterior, conta neste.")
+
+
 class Summary(BaseModel):
     month: str
     monthly_income: Decimal = Field(description="A renda deste mês, pelo histórico de rendas.")
@@ -116,18 +127,70 @@ class Summary(BaseModel):
     available_balance: Decimal = Field(
         description="Saldo acumulado: este mês somado a todos os anteriores."
     )
+    income_payments: list[IncomePayment] = Field(
+        description="Os pagamentos de renda fixa que contam neste mês; somam `monthly_income`."
+    )
+
+
+PaydayRule = Literal["dia_fixo", "ultimo_dia_util", "dia_util"]
+
+# Os mesmos anos que a API aceita nos meses (ver MONTH em finance.py).
+FIRST_DATE, LAST_DATE = datetime.date(1900, 1, 1), datetime.date(2199, 12, 31)
+
+
+class IncomePartIn(BaseModel):
+    # max_digits: o mesmo Numeric(12,2) da coluna; acima disso o Postgres recusaria com 500
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    rule: PaydayRule
+    day: int | None = Field(
+        default=None,
+        description="1 a 31 para `dia_fixo`, 1 a 23 para `dia_util`, nulo para `ultimo_dia_util`.",
+    )
+    next_month: bool = Field(default=False, description="O pagamento conta no mês seguinte.")
+
+    @model_validator(mode="after")
+    def day_matches_rule(self):
+        limit = {"dia_fixo": 31, "dia_util": MAX_NTH_BUSINESS_DAY}.get(self.rule)
+        if limit is None and self.day is not None:
+            raise ValueError("O último dia útil não leva dia.")
+        if limit is not None and not (self.day and 1 <= self.day <= limit):
+            raise ValueError(f"O dia vai de 1 a {limit}.")
+        return self
 
 
 class IncomeIn(BaseModel):
-    # max_digits: o mesmo Numeric(12,2) da coluna; acima disso o Postgres recusaria com 500
-    amount: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    start: date
+    end: date | None = Field(default=None, description="Último dia em que a renda vale; nulo é sem fim.")
+    parts: list[IncomePartIn] = Field(min_length=1, max_length=4)
+
+    @model_validator(mode="after")
+    def valid_period_and_parts(self):
+        if any(d < FIRST_DATE or d > LAST_DATE for d in (self.start, self.end) if d):
+            raise ValueError("As datas vão de 1900 a 2199.")
+        if self.end and self.end < self.start:
+            raise ValueError("O fim da renda vem antes do início.")
+        rules = [(p.rule, p.day) for p in self.parts]
+        if len(set(rules)) < len(rules):
+            raise ValueError("Duas partes no mesmo dia: receber tudo num dia é uma parte só.")
+        return self
+
+
+class IncomePartOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    amount: Decimal
+    rule: PaydayRule | None = Field(description="Nula: renda registrada antes de existir o dia.")
+    day: int | None
+    next_month: bool
+    next_date: date | None = Field(
+        description="Próxima data de pagamento a partir de hoje; nula sem regra ou com a renda encerrada."
+    )
 
 
 class IncomeOut(BaseModel):
-    """Renda que vale de `month` até o mês anterior à próxima registrada."""
-
-    month: str
-    amount: Decimal
+    id: int
+    start: date
+    end: date | None
+    parts: list[IncomePartOut]
 
 
 class ImportPreviewItem(BaseModel):

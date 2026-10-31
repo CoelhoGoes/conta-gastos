@@ -54,3 +54,17 @@ export function formatDayMonth(iso: string): string {
   const [, month, day] = iso.split('-')
   return `${day}/${month}`
 }
+
+/** A data de hoje no aparelho, em 'AAAA-MM-DD' — não em UTC, que já é amanhã à noite. */
+export function todayIso(): string {
+  const today = new Date()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${today.getFullYear()}-${month}-${day}`
+}
+
+/** '2026-10-30' → '30/10/2026'. */
+export function formatDate(iso: string): string {
+  const [year, month, day] = iso.split('-')
+  return `${day}/${month}/${year}`
+}

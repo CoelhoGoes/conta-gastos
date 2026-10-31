@@ -7,6 +7,7 @@ import type {
   EntryUpdate,
   ImportPreviewItem,
   Income,
+  IncomeIn,
   ImportResult,
   Invoice,
   Summary,
@@ -23,6 +24,7 @@ const token = () => localStorage.getItem(TOKEN_KEY);
 interface ValidationError {
   type: string
   loc: (string | number)[]
+  msg?: string
   ctx?: Record<string, unknown>
 }
 
@@ -38,9 +40,16 @@ const FIELD_LABELS: Record<string, string> = {
   type: 'Tipo',
   method: 'Forma',
   month: 'Mês',
+  start: 'Início',
+  end: 'Fim',
+  parts: 'Partes',
+  rule: 'Regra do dia',
+  day: 'Dia',
 }
 
-function validationMessage({ type, loc, ctx = {} }: ValidationError): string {
+function validationMessage({ type, loc, msg, ctx = {} }: ValidationError): string {
+  // as regras escritas no servidor (model_validator) já falam português
+  if (type === 'value_error' && msg) return msg.replace(/^Value error, /, '')
   const label = FIELD_LABELS[String(loc.at(-1))]
   if (!label) return 'Algum campo foi recusado. Confira os valores.'
   switch (type) {
@@ -60,6 +69,10 @@ function validationMessage({ type, loc, ctx = {} }: ValidationError): string {
       return `${label} grande demais.`
     case 'decimal_max_places':
       return `${label} aceita no máximo 2 casas decimais.`
+    case 'too_short':
+      return `${label}: inclua pelo menos um item.`
+    case 'too_long':
+      return `${label}: itens demais.`
     default:
       return `${label}: valor inválido.`
   }
@@ -71,6 +84,16 @@ export function errorMessage(detail: unknown): string {
     return [...new Set(detail.map(validationMessage))].join(' ')
   }
   return 'Não deu para completar a operação.'
+}
+
+// Carrega o status para a tela distinguir um erro do outro — o 409 da renda repetida abre
+// uma confirmação em vez de uma mensagem.
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
 }
 
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -92,7 +115,7 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(errorMessage(body.detail));
+    throw new ApiError(response.status, errorMessage(body.detail));
   }
   return response.status === 204 ? (null as T) : response.json();
 }
@@ -124,10 +147,13 @@ export const api = {
   saveConfig: (closing_day: number) =>
     req<User>('/auth/me', { method: 'PUT', body: JSON.stringify({ closing_day }) }),
 
-  incomes: () => req<Income[]>('/incomes'),
-  saveIncome: (month: string, amount: string) =>
-    req<Income>(`/incomes/${month}`, { method: 'PUT', body: JSON.stringify({ amount }) }),
-  removeIncome: (month: string) => req<null>(`/incomes/${month}`, { method: 'DELETE' }),
+  // `today` é a data de quem pergunta: o servidor não conhece o fuso (o mesmo do `until`)
+  incomes: (today: string) => req<Income[]>(`/incomes?today=${today}`),
+  createIncome: (data: IncomeIn, allowDuplicate = false) =>
+    req<Income>(`/incomes?allow_duplicate=${allowDuplicate}`, { method: 'POST', body: JSON.stringify(data) }),
+  updateIncome: (id: number, data: IncomeIn, allowDuplicate = false) =>
+    req<Income>(`/incomes/${id}?allow_duplicate=${allowDuplicate}`, { method: 'PUT', body: JSON.stringify(data) }),
+  removeIncome: (id: number) => req<null>(`/incomes/${id}`, { method: 'DELETE' }),
   deleteAccount: (password: string) =>
     req<null>('/auth/me', { method: 'DELETE', body: JSON.stringify({ password }) }),
 

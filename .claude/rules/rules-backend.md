@@ -10,11 +10,14 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
 
 - **`infra/database.py`** — SQLAlchemy engine/session (`DATABASE_URL` env var, defaults to local
   Postgres). `get_session()` is the FastAPI dependency that yields a session per request.
-- **`infra/models.py`** — three tables: `User` (email, bcrypt hash, `closing_day`), `Entry`
-  (`type` gasto/entrada, `amount`, `method` avista/credito, `installments`) and `Income` (the
-  monthly income history: `month`, always day 1, and `amount`, unique per user and month by
-  `uq_renda_mes`). Attribute names are English but map explicitly onto the existing Portuguese
-  DB columns (e.g. `usuarios`, `lancamentos`, `rendas`, `valor` — see **Language
+- **`infra/models.py`** — four tables: `User` (email, bcrypt hash, `closing_day`), `Entry`
+  (`type` gasto/entrada, `amount`, `method` avista/credito, `installments`), `Income` (the
+  fixed-income history: `start`, and `end` or null for open-ended; incomes may overlap and
+  sum, `ck_renda_periodo` keeps `end >= start`) and `IncomePart` (`partes_renda`: 1 to 4 per
+  income, each with `amount`, `rule` — `dia_fixo`/`dia_util`/`ultimo_dia_util`, or null for an
+  income from before the payday existed — `day` and `next_month`; cascade-deleted with the
+  income, loaded with it by `selectin`). Attribute names are English but map explicitly onto
+  the existing Portuguese DB columns (e.g. `usuarios`, `lancamentos`, `rendas`, `valor` — see **Language
   conventions**). Money columns are always
   `Numeric(12,2)`, never float. `Entry.import_id` (`id_importacao`) holds the origin of an imported
   line (`BANKID:ACCTID:FITID`) and is null for a typed entry; the `uq_lancamento_importacao`
@@ -27,7 +30,7 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   there can be more than one row with it (`_active_user` in `api/auth.py`).
 - **`api/schemas.py`** — Pydantic request/response contracts, using `Decimal` for all money fields
   (mirrors the DB `Numeric` columns — never switch these to `float`). `Summary`, `Invoice`,
-  `InvoiceInstallment`, `CategoryBreakdown` and `CategoryItem` have a twin dataclass in
+  `InvoiceInstallment`, `CategoryBreakdown`, `CategoryItem` and `IncomePayment` have a twin dataclass in
   `domain/service.py` with the same field names: the router returns the dataclass and
   `response_model` converts it. Rename a field and you rename it in both, then regenerate the frontend types.
 - **`infra/security.py`** — bcrypt password hashing and JWT issuance/verification (`JWT_SECRET` env
@@ -45,15 +48,21 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   password there counts against login too (and answers 403, not 401, which would make the
   frontend drop the session).
 - **`domain/service.py`** — the business rules, written as pure functions with no DB import
-  (`Entry`/`Income`/`User` are only imported under `TYPE_CHECKING`) and no API import (results are its own
+  (`Entry`/`Income`/`IncomePart`/`User` are only imported under `TYPE_CHECKING`) and no API import (results are its own
   dataclasses, not Pydantic), so they're unit-testable without a running Postgres.
   `invoice_for_purchase`, `split_installments`, `build_invoices` / `calculate_invoice`,
-  `income_for`, `calculate_summaries` / `calculate_summary`, `calculate_category_breakdown`.
+  `payment_date` / `income_payments` / `next_payment`, `calculate_summaries` /
+  `calculate_summary`, `calculate_category_breakdown`.
   `calculate_summaries` is where the accumulated balance lives: one running sum from the
   oldest entry or income up to the latest month asked, so `/trend` computes the series once;
-  `calculate_summary` is the one-month call of it. `month_start` turns `YYYY-MM` into the
-  date stored in `Income.month`. See `docs/dominio.md` for what each rule
-  means. `calculate_category_breakdown` is the only place that groups spending by category —
+  `calculate_summary` is the one-month call of it. `payment_date` is the credit date of a
+  payday rule in a month: it counts business days the CLT way and moves the result back to the
+  previous day with banks open — which can land in the month before. `_calendar(year)`
+  (cached) builds both calendars from the `holidays` lib: legal national holidays (they stop a
+  business day) and, on top, Carnival Monday/Tuesday and Corpus Christi (`OPTIONAL` category,
+  looked up by their English name — only banks close). `income_payments` is the income that
+  counts in a month, `next_payment` the next date of one part, for the Renda screen. See
+  `docs/dominio.md` for what each rule means. `calculate_category_breakdown` is the only place that groups spending by category —
   `calculate_summary` used to do it too and no longer does. `tests/test_service.py` exercises all of
   them with dataclass stubs and no database at all; add the test in the same commit as the rule.
 - **`domain/ofx.py`** — reads a bank statement in OFX and returns proposed entries
@@ -73,7 +82,10 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   test file, not `.ofx` on disk, because `*.ofx` is gitignored (a statement is bank data and
   never enters the repository). `test_api.py` does need a database: it boots the app against
   sqlite, or against Postgres when `TEST_DATABASE_URL` is set. `test_migrations.py` runs only
-  on Postgres (skipped on sqlite) — see the `alembic/` item. Install with
+  on Postgres (skipped on sqlite) — see the `alembic/` item. Each test builds its own engine, and `conftest.py`
+  disposes of it after the `TestClient`: left open, the pools ran the Postgres suite out of
+  connections ("too many clients already") — a new fixture that creates an engine does the
+  same. Install with
   `pip install -r requirements-dev.txt` — dev dependencies live there and never reach the
   image.
 - **`api/auth.py` / `api/finance.py`** — mounted at `/auth` and root respectively.
@@ -84,10 +96,13 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   that every new endpoint must reuse rather than repeat: `_owned_entry` (an `Entry` that
   belongs to the JWT user, 404 otherwise — used by `PATCH` and `DELETE`) and
   `_reject_income_on_credit` (used by create and by `PATCH`, which validates the merged
-  entry, not just the fields sent). `_income_at` is the income-history twin of
-  `_owned_entry` (the user's income for one month, or `None`). Every month in a path or query
-  goes through the `MONTH` pattern, which also caps the year at 1900–2199: the accumulated
-  balance walks month by month, and year 0001 or 9999 kept a request busy for seconds.
+  entry, not just the fields sent). `_owned_income` is the income twin of `_owned_entry`, and
+  `_reject_duplicate_income` answers 409 for an income equal to another (period and parts)
+  unless `allow_duplicate=true`. Every month in a path or query goes through the `MONTH`
+  pattern, and every date (`today`, an income's `start`/`end`) is held to the same years:
+  1900–2199, because the accumulated balance walks month by month, and year 0001 or 9999 kept
+  a request busy for seconds. Every id in a path is typed `Id` (`le=2**31 - 1`): ids are
+  Postgres `integer`, and a bigger one used to blow up the query as a 500.
 - **`main.py`** — app entrypoint; wires CORS from `ALLOWED_ORIGINS`, includes both routers,
   exposes `/health`. It creates **no** schema: `create_all` was removed on purpose, because
   running it alongside migrations lets the code's schema drift from the database in silence.

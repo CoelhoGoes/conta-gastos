@@ -17,9 +17,14 @@ e o versionamento tenta seguir [SemVer](https://semver.org/lang/pt-BR/).
   transações daquela categoria no mês
 - No resumo, clicar no gasto do mês, no centro do gráfico de rosca, abre uma janela com todas
   as categorias do mês, da que mais gastou para a que menos gastou
-- Histórico da renda mensal: em Configurações, a renda é registrada a partir de um mês e vale
-  até a próxima registrada, então mudar a renda não reescreve os meses passados. As rendas
-  registradas aparecem numa lista, cada uma com opção de apagar
+- Aba Renda, com o histórico da renda fixa: cada renda vale de uma data de início até um fim
+  opcional, então mudar a renda não reescreve os meses passados, e duas rendas ao mesmo tempo
+  se somam. A renda pode ser dividida em até 4 partes, cada uma num dia fixo, no N-ésimo dia
+  útil ou no último dia útil do mês, e pode contar no mês seguinte (o salário que paga as
+  contas do mês que vem). Se o dia cair num feriado ou fim de semana, o crédito é antecipado
+  para o dia útil anterior. A lista mostra a próxima data de cada parte, e registrar uma renda
+  igual a outra pede confirmação
+- No resumo, a renda do mês mostra em que dia cai cada pagamento
 
 ### Alterado
 - O saldo disponível passou a ser acumulado: o que sobra ou falta num mês passa para o

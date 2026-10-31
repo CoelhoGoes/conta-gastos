@@ -54,4 +54,21 @@ describe('errorMessage', () => {
     expect(errorMessage([{ type: 'value_error', loc: ['body'] }]))
       .toBe('Algum campo foi recusado. Confira os valores.')
   })
+
+  // as regras escritas no servidor (model_validator da renda) já chegam em português
+  it('regra do servidor mostra a própria frase, sem o prefixo do Pydantic', () => {
+    expect(errorMessage([{
+      type: 'value_error', loc: ['body'], msg: 'Value error, O fim da renda vem antes do início.',
+    }])).toBe('O fim da renda vem antes do início.')
+    expect(errorMessage([{
+      type: 'value_error', loc: ['body', 'parts', 0], msg: 'Value error, O dia vai de 1 a 31.',
+    }])).toBe('O dia vai de 1 a 31.')
+  })
+
+  it('lista vazia ou longa demais aponta o campo', () => {
+    expect(errorMessage([{ type: 'too_short', loc: ['body', 'parts'], ctx: { min_length: 1 } }]))
+      .toBe('Partes: inclua pelo menos um item.')
+    expect(errorMessage([{ type: 'too_long', loc: ['body', 'parts'], ctx: { max_length: 4 } }]))
+      .toBe('Partes: itens demais.')
+  })
 })

@@ -5,14 +5,19 @@ compute exactly the same thing.
 """
 from __future__ import annotations
 
+import calendar
 from collections import defaultdict
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
+from datetime import date, timedelta
 from decimal import Decimal
+from functools import cache
 from typing import TYPE_CHECKING
 
+import holidays
+from holidays.constants import OPTIONAL
+
 if TYPE_CHECKING:  # avoids depending on the DB: the rules below are testable on their own
-    from ..infra.models import Entry, Income, User
+    from ..infra.models import Entry, Income, IncomePart, User
 
 
 # Results of the rules below. Plain dataclasses, not Pydantic: the domain does not know
@@ -57,6 +62,17 @@ class CategoryBreakdown:
 
 
 @dataclass
+class IncomePayment:
+    """One payment of a fixed income that counts in a month. `date` is when the money arrives
+    (None for an income registered before payment days existed); `next_month` says it was paid
+    in the month before and counts in this one."""
+
+    date: date | None
+    amount: Decimal
+    next_month: bool
+
+
+@dataclass
 class Summary:
     """`month_balance` is the month on its own; `available_balance` carries every month
     before it too (the accumulated balance)."""
@@ -69,6 +85,7 @@ class Summary:
     total_spent: Decimal
     month_balance: Decimal
     available_balance: Decimal
+    income_payments: list[IncomePayment] = field(default_factory=list)
 
 CENT = Decimal("0.01")
 SHARE = Decimal("0.0001")
@@ -134,12 +151,92 @@ def calculate_invoice(month: str, entries: list[Entry], closing_day: int) -> Inv
     return Invoice(month=month, total=sum((i.installment_amount for i in items), Decimal(0)), items=items)
 
 
-def income_for(month: str, incomes: list[Income]) -> Decimal:
-    """The income registered with the latest start month up to `month`; zero before the first."""
-    started = [i for i in incomes if month_key(i.month) <= month]
-    if not started:
-        return Decimal(0)
-    return Decimal(max(started, key=lambda i: i.month).amount)
+# The highest N for "the Nth business day": the fewest business days any month between 1900
+# and 2199 has under the CLT count (February 1900). Any N up to it exists in every month.
+MAX_NTH_BUSINESS_DAY = 23
+
+
+@cache
+def _calendar(year: int) -> tuple[frozenset[date], frozenset[date]]:
+    """(legal national holidays, days without banks) for a year.
+
+    Carnival Monday and Tuesday and Corpus Christi are not holidays by law, so the CLT count
+    treats them as business days, but banks do not credit on them."""
+    legal = frozenset(holidays.Brazil(years=year))
+    optional = holidays.Brazil(years=year, categories=(OPTIONAL,), language="en_US")
+    no_bank = legal | frozenset(optional.get_named("Carnival") + optional.get_named("Corpus Christi"))
+    return legal, no_bank
+
+
+def _is_business_day(d: date) -> bool:
+    """The CLT count (IN MTP 2/2021, art. 14): Saturday counts, Sunday and holidays do not."""
+    return d.weekday() != 6 and d not in _calendar(d.year)[0]
+
+
+def _bank_day_on_or_before(d: date) -> date:
+    """Money arrives on a weekday with banks open; anything else is paid the bank day before."""
+    while d.weekday() >= 5 or d in _calendar(d.year)[1]:
+        d -= timedelta(days=1)
+    return d
+
+
+def payment_date(rule: str, day: int | None, year: int, month: int) -> date:
+    """When a part paid in `year`/`month` arrives.
+
+    `dia_fixo` is that day of the month (the last one when the month is shorter); `dia_util`
+    is the Nth business day by the CLT count; `ultimo_dia_util` is the last one. Whatever
+    the rule gives is then moved back to the nearest day the bank credits — a Saturday 5th
+    business day is paid on Friday, and so is a fixed day falling on a weekend."""
+    last = calendar.monthrange(year, month)[1]
+    if rule == "dia_fixo":
+        target = date(year, month, min(day, last))
+    elif rule == "dia_util":
+        days = (date(year, month, n) for n in range(1, last + 1))
+        target = [d for d in days if _is_business_day(d)][day - 1]
+    else:  # ultimo_dia_util
+        target = date(year, month, last)
+    return _bank_day_on_or_before(target)
+
+
+def _paid_on(part: IncomePart, paid_in: str) -> date | None:
+    year, month = map(int, paid_in.split("-"))
+    return payment_date(part.rule, part.day, year, month) if part.rule else None
+
+
+def _within(income: Income, d: date) -> bool:
+    return income.start <= d and (income.end is None or d <= income.end)
+
+
+def income_payments(month: str, incomes: list[Income]) -> list[IncomePayment]:
+    """The payments that count in `month`: those paid in it, and those paid in the month before
+    by a part marked `next_month`. A payment counts when its date falls inside its income's
+    period. A part without a rule (registered before payment days existed) is taken as paid on
+    the 1st and counted in its own month, which is how incomes worked until then."""
+    payments = []
+    for income in incomes:
+        for part in income.parts:
+            paid_in = shift_month(month, -1) if part.next_month else month
+            paid_on = _paid_on(part, paid_in)
+            if _within(income, paid_on or month_start(paid_in)):
+                payments.append(IncomePayment(paid_on, Decimal(part.amount), part.next_month))
+    return sorted(payments, key=lambda p: p.date or date.min)
+
+
+def next_payment(income: Income, part: IncomePart, today: date) -> date | None:
+    """The first date on or after `today` this part pays, inside its income's period.
+    None when the income has ended or the part has no rule."""
+    if not part.rule:
+        return None
+    paid_in = max(month_key(today), month_key(income.start))
+    # the date may move back into the month before, so the first month asked can fall short
+    for _ in range(3):
+        paid_on = _paid_on(part, paid_in)
+        if income.end is not None and paid_on > income.end:
+            return None
+        if paid_on >= today and _within(income, paid_on):
+            return paid_on
+        paid_in = shift_month(paid_in, 1)
+    return None
 
 
 def calculate_summaries(
@@ -153,7 +250,8 @@ def calculate_summaries(
 
     def month_summary(month: str) -> Summary:
         this_month = by_month.get(month, [])
-        income = income_for(month, incomes)
+        payments = income_payments(month, incomes)
+        income = sum((p.amount for p in payments), Decimal(0))
         extra_income = sum(
             (Decimal(e.amount) for e in this_month if e.type == "entrada"), Decimal(0)
         )
@@ -172,12 +270,14 @@ def calculate_summaries(
             total_spent=cash_expenses + invoice,
             month_balance=balance,
             available_balance=balance,
+            income_payments=payments,
         )
 
-    # Before the first entry and the first income every month adds zero (an installment always
-    # falls after its purchase), so the running sum may start there without changing the result.
+    # Before the first entry and the first income start every month adds zero (an installment
+    # falls after its purchase, and a payment never before its income starts — at most in the
+    # month after), so the running sum may start there without changing the result.
     computed: dict[str, Summary] = {}
-    starts = [*by_month, *(month_key(i.month) for i in incomes)]
+    starts = [*by_month, *(month_key(i.start) for i in incomes)]
     if starts and months:
         current, total = min(starts), Decimal(0)
         while current <= max(months):

@@ -1,9 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/state/auth-context'
 import { currentMonth, shiftMonth } from '@/shared/format'
+import type { Summary } from '@/shared/types'
 import { SummaryScreen } from './SummaryScreen'
 
 vi.mock('@/data/api', () => ({
@@ -28,6 +29,7 @@ const resumo = (monthly_income: string) => ({
   total_spent: '0',
   month_balance: monthly_income,
   available_balance: monthly_income,
+  income_payments: [] as Summary['income_payments'],
 })
 
 const LAZER = {
@@ -63,6 +65,51 @@ describe('SummaryScreen', () => {
     montar()
     expect(await screen.findByText(/renda mensal vale para este mês/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /informar renda mensal/i })).toBeInTheDocument()
+  })
+
+  it('o aviso de renda zero leva para a tela Renda', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.summary).mockResolvedValue(resumo('0'))
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<SummaryScreen />} />
+            <Route path="/renda" element={<p>tela da renda</p>} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await user.click(await screen.findByRole('button', { name: /informar renda mensal/i }))
+    expect(await screen.findByText('tela da renda')).toBeInTheDocument()
+  })
+
+  // UC4: o salário de 30/10 que conta em novembro aparece no resumo de novembro
+  it('lista os pagamentos que formam a renda do mês', async () => {
+    vi.mocked(api.summary).mockResolvedValue({
+      ...resumo('5000.00'),
+      income_payments: [
+        { date: '2026-10-30', amount: '3000.00', next_month: true },
+        { date: '2026-11-13', amount: '2000.00', next_month: false },
+      ],
+    })
+    montar()
+    const lista = await screen.findByRole('list', { name: 'Pagamentos da renda' })
+    const linhas = within(lista).getAllByRole('listitem')
+    expect(linhas[0]).toHaveTextContent('30/10 · recebida no mês anterior')
+    expect(linhas[0]).toHaveTextContent('R$ 3.000,00')
+    expect(linhas[1]).toHaveTextContent('13/11')
+    expect(linhas[1]).not.toHaveTextContent('mês anterior')
+  })
+
+  it('renda antiga sem dia aparece como tal', async () => {
+    vi.mocked(api.summary).mockResolvedValue({
+      ...resumo('5000.00'),
+      income_payments: [{ date: null, amount: '5000.00', next_month: false }],
+    })
+    montar()
+    const lista = await screen.findByRole('list', { name: 'Pagamentos da renda' })
+    expect(lista).toHaveTextContent('Sem dia definido')
   })
 
   it('não avisa quando a renda já foi informada', async () => {

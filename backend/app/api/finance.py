@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, UploadFile, status
@@ -16,11 +17,11 @@ from ..domain.service import (
     calculate_summary,
     is_income_on_credit,
     month_key,
-    month_start,
+    next_payment,
     shift_month,
 )
 from ..infra.database import get_session
-from ..infra.models import Entry, Income, User
+from ..infra.models import Entry, Income, IncomePart, User
 from .deps import current_user
 from .schemas import (
     CategoryBreakdown,
@@ -32,6 +33,7 @@ from .schemas import (
     ImportResult,
     IncomeIn,
     IncomeOut,
+    IncomePartOut,
     Invoice,
     Summary,
 )
@@ -59,14 +61,53 @@ def _incomes(session: Session, user: User) -> list[Income]:
     return list(session.scalars(select(Income).where(Income.user_id == user.id)))
 
 
-def _income_at(session: Session, user: User, month: str) -> Income | None:
-    return session.scalar(
-        select(Income).where(Income.user_id == user.id, Income.month == month_start(month))
+def _owned_income(session: Session, user: User, income_id: int) -> Income:
+    """A renda, se for deste usuário — 404 nos dois casos, como `_owned_entry`."""
+    income = session.get(Income, income_id)
+    if not income or income.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Renda não encontrada.")
+    return income
+
+
+def _income_out(income: Income, today: date) -> IncomeOut:
+    return IncomeOut(
+        id=income.id,
+        start=income.start,
+        end=income.end,
+        parts=[
+            IncomePartOut(
+                amount=p.amount, rule=p.rule, day=p.day, next_month=p.next_month,
+                next_date=next_payment(income, p, today),
+            )
+            for p in income.parts
+        ],
     )
 
 
-def _income_out(income: Income) -> IncomeOut:
-    return IncomeOut(month=month_key(income.month), amount=income.amount)
+def _income_shape(start, end, parts) -> tuple:
+    """O que torna duas rendas idênticas: o período e as partes, em qualquer ordem."""
+    return start, end, sorted((Decimal(p.amount), p.rule or "", p.day or 0, p.next_month) for p in parts)
+
+
+def _reject_duplicate_income(
+    session: Session, user: User, data: IncomeIn, allow: bool, ignore_id: int | None = None
+) -> None:
+    """F10: com rendas sobrepostas permitidas, um reenvio criaria uma segunda renda igual. O
+    409 deixa a tela perguntar; `allow_duplicate` é a resposta "registrar mesmo assim"."""
+    if allow:
+        return
+    wanted = _income_shape(data.start, data.end, data.parts)
+    for income in _incomes(session, user):
+        if income.id != ignore_id and _income_shape(income.start, income.end, income.parts) == wanted:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Essa renda já foi registrada.")
+
+
+def _today(today: date | None) -> date:
+    # UTC pelo mesmo motivo do /trend: o servidor não conhece o fuso de quem pergunta
+    today = today or datetime.now(UTC).date()
+    if not 1900 <= today.year <= 2199:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "A data vai de 1900 a 2199.")
+    return today
 
 
 def _owned_entry(session: Session, user: User, entry_id: int) -> Entry:
@@ -83,6 +124,10 @@ def _reject_income_on_credit(data: EntryCreate) -> None:
     `EntryImport` nem tem `method`, então uma linha importada não chega ao crédito."""
     if is_income_on_credit(data.type, data.method):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Entrada não vai no crédito.")
+
+
+def _parts(data: IncomeIn) -> list[IncomePart]:
+    return [IncomePart(**p.model_dump()) for p in data.parts]
 
 
 def _known_import_ids(session: Session, user: User, ids: list[str]) -> set[str]:
@@ -206,41 +251,55 @@ def trend(
 
 @router.get("/incomes", response_model=list[IncomeOut])
 def list_incomes(
+    today: date | None = Query(None, description="Hoje para quem pergunta; sem ele, hoje em UTC."),
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    return [_income_out(i) for i in sorted(_incomes(session, user), key=lambda i: i.month)]
+    today = _today(today)
+    incomes = sorted(_incomes(session, user), key=lambda i: (i.start, i.id))
+    return [_income_out(i, today) for i in incomes]
 
 
-@router.put("/incomes/{month}", response_model=IncomeOut)
-def save_income(
+@router.post("/incomes", response_model=IncomeOut, status_code=201)
+def create_income(
     data: IncomeIn,
-    month: str = Path(pattern=MONTH),
+    allow_duplicate: bool = False,
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    """Cria ou substitui a renda que vale a partir de `month`."""
-    income = _income_at(session, user, month)
-    if income:
-        income.amount = data.amount
-    else:
-        income = Income(user_id=user.id, month=month_start(month), amount=data.amount)
-        session.add(income)
+    _reject_duplicate_income(session, user, data, allow_duplicate)
+    income = Income(user_id=user.id, start=data.start, end=data.end, parts=_parts(data))
+    session.add(income)
     session.commit()
     session.refresh(income)
-    return _income_out(income)
+    return _income_out(income, _today(None))
 
 
-@router.delete("/incomes/{month}", status_code=204)
-def remove_income(
-    month: str = Path(pattern=MONTH),
+@router.put("/incomes/{income_id}", response_model=IncomeOut)
+def update_income(
+    income_id: Id,
+    data: IncomeIn,
+    allow_duplicate: bool = False,
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ):
-    income = _income_at(session, user, month)
-    if not income:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Renda não encontrada.")
-    session.delete(income)
+    """Substitui a renda inteira. As partes antigas saem no mesmo commit (delete-orphan), então
+    a renda nunca fica com só parte das partes novas (F11)."""
+    income = _owned_income(session, user, income_id)
+    _reject_duplicate_income(session, user, data, allow_duplicate, ignore_id=income.id)
+    income.start, income.end, income.parts = data.start, data.end, _parts(data)
+    session.commit()
+    session.refresh(income)
+    return _income_out(income, _today(None))
+
+
+@router.delete("/incomes/{income_id}", status_code=204)
+def remove_income(
+    income_id: Id,
+    user: User = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    session.delete(_owned_income(session, user, income_id))
     session.commit()
 
 

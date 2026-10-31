@@ -12,7 +12,7 @@ duplicada no cliente.
 
 | Camada | Tecnologia |
 | --- | --- |
-| Backend | FastAPI, SQLAlchemy 2, Alembic, Pydantic 2, PyJWT, bcrypt, ofxtools (leitura de OFX) |
+| Backend | FastAPI, SQLAlchemy 2, Alembic, Pydantic 2, PyJWT, bcrypt, ofxtools (leitura de OFX), holidays (feriados nacionais) |
 | Banco | PostgreSQL 16 |
 | Frontend | React 19, TypeScript, Vite, React Router |
 | UI | Tailwind CSS v4, shadcn/ui sobre **Base UI** (não Radix), ícones Remix |
@@ -150,9 +150,9 @@ cd frontend && npx -y knip                    # código e dependências sem uso 
 
 ```bash
 pip install -r backend/requirements-dev.txt   # uma vez
-cd backend && pytest                          # 179 testes (2 pulados em sqlite), ~20s
+cd backend && pytest                          # 221 testes (3 pulados em sqlite), ~30s
 
-cd frontend && npm test                       # 130 testes, ~6s
+cd frontend && npm test                       # 143 testes, ~6s
 ```
 
 Os testes de `backend/tests/test_service.py` e `test_ofx.py` não precisam de banco —
@@ -193,17 +193,17 @@ backend/
     │   └── ofx.py         leitura de extrato OFX
     └── infra/             o que fala com o mundo de fora
         ├── database.py    engine e sessão do SQLAlchemy
-        ├── models.py      tabelas usuarios, lancamentos e rendas
+        ├── models.py      tabelas usuarios, lancamentos, rendas e partes_renda
         └── security.py    hash bcrypt e JWT
 
 frontend/
 └── src/               em camadas: presentation → state → data, e shared para todas
     ├── main.tsx       monta o React dentro do BrowserRouter + AuthProvider
-    ├── App.tsx        tabela de rotas (/login, /, /lancamentos, /fatura, /importar,
-    │                  /configuracoes)
+    ├── App.tsx        tabela de rotas (/login, /, /lancamentos, /fatura, /renda,
+    │                  /importar, /configuracoes)
     ├── index.css      Tailwind v4 + tokens de tema do shadcn
     ├── presentation/  o que aparece na tela
-    │   ├── pages/     uma tela por arquivo (Login/Summary/Entry/Invoice/Import/Config)
+    │   ├── pages/     uma tela por arquivo (Login/Summary/Entry/Invoice/Income/Import/Config)
     │   └── components/
     │       ├── Page.tsx        invólucro das telas logadas: navbar + conteúdo até 1152px
     │       ├── Header.tsx      navbar de ponta a ponta, compartilhada entre as telas
@@ -271,9 +271,10 @@ Todos exigem `Authorization: Bearer <token>`, exceto `/auth/register`, `/auth/to
 | GET | `/summary/{month}/categories` | gasto por categoria, com os itens e o número da parcela |
 | GET | `/invoices/{month}` | itens e total da fatura que vence no mês |
 | GET | `/trend` | série dos últimos meses (`?months=6`, `?until=2026-09`) |
-| GET | `/incomes` | rendas registradas, em ordem de mês |
-| PUT | `/incomes/{month}` | registra a renda que vale a partir do mês (repetir substitui) |
-| DELETE | `/incomes/{month}` | apaga a renda daquele mês |
+| GET | `/incomes` | rendas registradas, por data de início, com a próxima data de cada parte (`?today=2026-10-31`, a data de quem pergunta) |
+| POST | `/incomes` | registra uma renda (início, fim opcional, até 4 partes); igual a outra responde 409, a menos que venha `?allow_duplicate=true` |
+| PUT | `/incomes/{id}` | substitui a renda inteira, com a mesma regra de duplicata |
+| DELETE | `/incomes/{id}` | apaga a renda e as partes dela |
 | POST | `/imports/preview` | lê um extrato OFX (multipart, campo `file`) e devolve as linhas, sem gravar |
 | POST | `/imports` | grava as linhas revisadas (sempre à vista), pulando as já importadas |
 | GET | `/health` | status da API |
@@ -304,12 +305,13 @@ Antes de expor na internet:
 ## Estado atual
 
 **Funciona:** registro, login, sessão persistida em `localStorage`, roteamento multi-página
-(`/login`, `/`, `/lancamentos`, `/fatura`, `/importar`, `/configuracoes`), tela de resumo mensal
-(saldo acumulado e do mês, renda, fatura, gasto por categoria num gráfico de rosca com as transações de cada
+(`/login`, `/`, `/lancamentos`, `/fatura`, `/renda`, `/importar`, `/configuracoes`), tela de resumo mensal
+(saldo acumulado e do mês, renda com o dia de cada pagamento, fatura, gasto por categoria num gráfico de rosca com as transações de cada
 categoria num popup, e gráfico de tendência dos últimos meses), tela de lançamentos (criar,
 editar, listar e excluir gastos/entradas do mês), tela de fatura (consulta por mês, com
-navegação entre meses), importação de extrato OFX com conferência antes de gravar, e tela de
-configuração (renda mensal com histórico por mês, dia de fechamento, tema claro/escuro seguindo o sistema por padrão,
+navegação entre meses), tela de renda (histórico com início e fim, até 4 partes por renda,
+cada uma num dia fixo, N-ésimo ou último dia útil, com feriados nacionais), importação de
+extrato OFX com conferência antes de gravar, e tela de configuração (dia de fechamento, tema claro/escuro seguindo o sistema por padrão,
 e exclusão da conta). No computador, as telas usam a largura da tela em colunas; no celular, uma
 coluna só.
 Backend completo com todos os endpoints acima; o schema é das migrações Alembic.

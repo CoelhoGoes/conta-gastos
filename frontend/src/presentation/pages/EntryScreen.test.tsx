@@ -24,6 +24,7 @@ const { api } = await import('@/data/api')
 const RESUMO = {
   month: '2026-09', monthly_income: '5000.00', extra_income: '0', cash_expenses: '0',
   invoice: '0', total_spent: '0', month_balance: '1000.00', available_balance: '4000.00',
+  income_payments: [],
 }
 const LANCAMENTO: EntryOut = {
   id: 1, description: 'feira', amount: '150.50', type: 'gasto',

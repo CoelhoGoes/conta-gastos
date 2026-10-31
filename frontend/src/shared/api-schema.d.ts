@@ -171,14 +171,15 @@ export interface paths {
         /** List Incomes */
         get: operations["list_incomes_incomes_get"];
         put?: never;
-        post?: never;
+        /** Create Income */
+        post: operations["create_income_incomes_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/incomes/{month}": {
+    "/incomes/{income_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -187,13 +188,14 @@ export interface paths {
         };
         get?: never;
         /**
-         * Save Income
-         * @description Cria ou substitui a renda que vale a partir de `month`.
+         * Update Income
+         * @description Substitui a renda inteira. As partes antigas saem no mesmo commit (delete-orphan), então
+         *     a renda nunca fica com só parte das partes novas (F11).
          */
-        put: operations["save_income_incomes__month__put"];
+        put: operations["update_income_incomes__income_id__put"];
         post?: never;
         /** Remove Income */
-        delete: operations["remove_income_incomes__month__delete"];
+        delete: operations["remove_income_incomes__income_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -485,18 +487,87 @@ export interface components {
         };
         /** IncomeIn */
         IncomeIn: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * @description Último dia em que a renda vale; nulo é sem fim.
+             */
+            end?: string | null;
+            /** Parts */
+            parts: components["schemas"]["IncomePartIn"][];
+        };
+        /** IncomeOut */
+        IncomeOut: {
+            /** Id */
+            id: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** End */
+            end: string | null;
+            /** Parts */
+            parts: components["schemas"]["IncomePartOut"][];
+        };
+        /** IncomePartIn */
+        IncomePartIn: {
             /** Amount */
             amount: number | string;
+            /**
+             * Rule
+             * @enum {string}
+             */
+            rule: "dia_fixo" | "ultimo_dia_util" | "dia_util";
+            /**
+             * Day
+             * @description 1 a 31 para `dia_fixo`, 1 a 23 para `dia_util`, nulo para `ultimo_dia_util`.
+             */
+            day?: number | null;
+            /**
+             * Next Month
+             * @description O pagamento conta no mês seguinte.
+             * @default false
+             */
+            next_month?: boolean;
         };
-        /**
-         * IncomeOut
-         * @description Renda que vale de `month` até o mês anterior à próxima registrada.
-         */
-        IncomeOut: {
-            /** Month */
-            month: string;
+        /** IncomePartOut */
+        IncomePartOut: {
             /** Amount */
             amount: string;
+            /**
+             * Rule
+             * @description Nula: renda registrada antes de existir o dia.
+             */
+            rule: ("dia_fixo" | "ultimo_dia_util" | "dia_util") | null;
+            /** Day */
+            day: number | null;
+            /** Next Month */
+            next_month: boolean;
+            /**
+             * Next Date
+             * @description Próxima data de pagamento a partir de hoje; nula sem regra ou com a renda encerrada.
+             */
+            next_date: string | null;
+        };
+        /** IncomePayment */
+        IncomePayment: {
+            /**
+             * Date
+             * @description Quando o dinheiro cai. Nulo para renda registrada antes de existir o dia.
+             */
+            date: string | null;
+            /** Amount */
+            amount: string;
+            /**
+             * Next Month
+             * @description Pago no mês anterior, conta neste.
+             */
+            next_month: boolean;
         };
         /** Invoice */
         Invoice: {
@@ -554,6 +625,11 @@ export interface components {
              * @description Saldo acumulado: este mês somado a todos os anteriores.
              */
             available_balance: string;
+            /**
+             * Income Payments
+             * @description Os pagamentos de renda fixa que contam neste mês; somam `monthly_income`.
+             */
+            income_payments: components["schemas"]["IncomePayment"][];
         };
         /** Token */
         Token: {
@@ -1019,7 +1095,10 @@ export interface operations {
     };
     list_incomes_incomes_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Hoje para quem pergunta; sem ele, hoje em UTC. */
+                today?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1035,14 +1114,60 @@ export interface operations {
                     "application/json": components["schemas"]["IncomeOut"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    save_income_incomes__month__put: {
+    create_income_incomes_post: {
         parameters: {
-            query?: never;
+            query?: {
+                allow_duplicate?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncomeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_income_incomes__income_id__put: {
+        parameters: {
+            query?: {
+                allow_duplicate?: boolean;
+            };
             header?: never;
             path: {
-                month: string;
+                income_id: number;
             };
             cookie?: never;
         };
@@ -1072,12 +1197,12 @@ export interface operations {
             };
         };
     };
-    remove_income_incomes__month__delete: {
+    remove_income_incomes__income_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                month: string;
+                income_id: number;
             };
             cookie?: never;
         };

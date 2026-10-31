@@ -30,9 +30,18 @@ class FakeUser:
 
 
 @dataclass
-class FakeIncome:
-    month: date
+class FakeIncomePart:
     amount: Decimal
+    rule: str | None = None
+    day: int | None = None
+    next_month: bool = False
+
+
+@dataclass
+class FakeIncome:
+    start: date
+    parts: list[FakeIncomePart]
+    end: date | None = None
 
 
 @pytest.fixture
@@ -42,8 +51,21 @@ def user():
 
 @pytest.fixture
 def renda():
-    def make(month: str, amount: str):
-        return FakeIncome(month=date.fromisoformat(f"{month}-01"), amount=Decimal(amount))
+    """Uma renda de uma parte só. Sem `parts`, a parte não tem regra de dia: conta no próprio
+    mês, como as rendas registradas antes do dia de pagamento existir."""
+    def make(month: str, amount: str = "0", end: str | None = None, parts=None):
+        return FakeIncome(
+            start=date.fromisoformat(f"{month}-01"),
+            parts=parts or [FakeIncomePart(Decimal(amount))],
+            end=date.fromisoformat(end) if end else None,
+        )
+    return make
+
+
+@pytest.fixture
+def parte():
+    def make(amount: str, rule: str | None = None, day: int | None = None, next_month=False):
+        return FakeIncomePart(Decimal(amount), rule, day, next_month)
     return make
 
 
@@ -84,6 +106,9 @@ def client(monkeypatch, tmp_path):
 
     with TestClient(main.app) as c:
         yield c
+    # Cada teste reimporta o app e cria um engine novo. Sem o dispose, as conexões do pool
+    # ficam abertas até o coletor de lixo, e no Postgres a suíte esgota o limite de clientes.
+    engine.dispose()
 
 
 @pytest.fixture

@@ -87,12 +87,62 @@ def test_renda_das_contas_existentes_vira_historico(monkeypatch):
                        (1, 'gasto', 10, 'a', 'Outros', '2026-07-21', 'avista', 1),
                        (3, 'gasto', 10, 'c', 'Outros', '2026-05-01', 'avista', 1)
             """))
-        command.upgrade(config, "head")
+        command.upgrade(config, "580bb2fb1f8d")
         with engine.begin() as conn:
             rendas = conn.execute(
                 text("SELECT usuario_id, mes::text, valor::text FROM rendas ORDER BY usuario_id")
             ).all()
         engine.dispose()
         assert rendas == [(1, "2026-07-01", "5000.00"), (2, "2026-03-01", "3000.00")]
+    finally:
+        _empty_database()
+
+
+def test_rendas_antigas_ganham_fim_e_viram_uma_parte_sem_dia(monkeypatch):
+    """F8: a renda valia até começar a próxima; esse fim vira explícito, para as antigas não
+    passarem a se somar. A renda vira uma parte sem regra (UC10), e a renda 0 sai — o fim da
+    anterior já diz que a pessoa parou de receber."""
+    from alembic.config import Config
+
+    from alembic import command
+
+    monkeypatch.setenv("DATABASE_URL", URL)
+    for mod in [m for m in sys.modules if m == "app" or m.startswith("app.")]:
+        del sys.modules[mod]
+
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND / "alembic"))
+
+    _empty_database()
+    try:
+        command.upgrade(config, "580bb2fb1f8d")  # a última antes do dia de pagamento
+        engine = create_engine(URL)
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO usuarios (id, email, senha_hash, dia_fechamento, criado_em)
+                VALUES (1, 'a@b.co', 'x', 10, '2026-01-01'), (2, 'b@b.co', 'x', 10, '2026-01-01')
+            """))
+            conn.execute(text("""
+                INSERT INTO rendas (usuario_id, mes, valor)
+                VALUES (1, '2026-01-01', 3000), (1, '2026-05-01', 4000), (1, '2026-08-01', 0),
+                       (1, '2026-10-01', 5000), (2, '2026-03-01', 2000)
+            """))
+        command.upgrade(config, "head")
+        with engine.begin() as conn:
+            rendas = conn.execute(text("""
+                SELECT r.usuario_id, r.inicio::text, r.fim::text, p.valor::text, p.regra,
+                       p.mes_seguinte
+                FROM rendas r JOIN partes_renda p ON p.renda_id = r.id
+                ORDER BY r.usuario_id, r.inicio
+            """)).all()
+            sobra = conn.execute(text("SELECT count(*) FROM rendas")).scalar()
+        engine.dispose()
+        assert rendas == [
+            (1, "2026-01-01", "2026-04-30", "3000.00", None, False),
+            (1, "2026-05-01", "2026-07-31", "4000.00", None, False),
+            (1, "2026-10-01", None, "5000.00", None, False),
+            (2, "2026-03-01", None, "2000.00", None, False),
+        ]
+        assert sobra == 4  # a renda 0 de agosto saiu
     finally:
         _empty_database()

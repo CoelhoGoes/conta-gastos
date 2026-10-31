@@ -1,6 +1,9 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -52,20 +55,49 @@ class User(Base):
 
 
 class Income(Base):
-    """Renda mensal a partir de um mês. Vale até o mês anterior à próxima renda registrada."""
+    """Renda fixa: vale de `start` até `end` (sem fim quando nulo), paga nas suas partes.
+    Rendas podem se sobrepor — dois empregos somam."""
 
     __tablename__ = "rendas"
-    __table_args__ = (UniqueConstraint("usuario_id", "mes", name="uq_renda_mes"),)
+    __table_args__ = (CheckConstraint("fim IS NULL OR fim >= inicio", name="ck_renda_periodo"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
         "usuario_id", ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
     )
-    # sempre o dia 1: a renda vale por mês, o dia não carrega significado
-    month: Mapped[date] = mapped_column("mes", Date)
-    amount: Mapped[float] = mapped_column("valor", Numeric(12, 2))
+    start: Mapped[date] = mapped_column("inicio", Date)
+    end: Mapped[date | None] = mapped_column("fim", Date, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="incomes")
+    # selectin: todo uso da renda (resumo, tendência, lista) precisa das partes
+    parts: Mapped[list["IncomePart"]] = relationship(
+        back_populates="income", cascade="all, delete-orphan", order_by="IncomePart.id",
+        lazy="selectin",
+    )
+
+
+class IncomePart(Base):
+    """Um pagamento da renda: quanto, em que dia do mês e se conta no mês seguinte.
+    `rule` nula é renda registrada antes de existir o dia: conta no próprio mês."""
+
+    __tablename__ = "partes_renda"
+    __table_args__ = (
+        CheckConstraint("valor > 0", name="ck_parte_renda_valor"),
+        CheckConstraint(
+            "regra IN ('dia_fixo', 'ultimo_dia_util', 'dia_util')", name="ck_parte_renda_regra"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    income_id: Mapped[int] = mapped_column(
+        "renda_id", ForeignKey("rendas.id", ondelete="CASCADE"), index=True
+    )
+    amount: Mapped[Decimal] = mapped_column("valor", Numeric(12, 2))
+    rule: Mapped[str | None] = mapped_column("regra", String(20), nullable=True)
+    day: Mapped[int | None] = mapped_column("dia", Integer, nullable=True)
+    next_month: Mapped[bool] = mapped_column("mes_seguinte", Boolean, default=False)
+
+    income: Mapped["Income"] = relationship(back_populates="parts")
 
 
 class Entry(Base):

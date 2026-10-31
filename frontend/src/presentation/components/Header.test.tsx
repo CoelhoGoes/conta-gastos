@@ -36,13 +36,13 @@ describe('Header', () => {
     vi.mocked(api.me).mockResolvedValue({ id: 1, email: 'a@b.co', closing_day: 10 })
   })
 
-  // UC6: as quatro abas ficam sempre na barra, inclusive a da tela aberta
+  // UC6: as abas ficam sempre na barra, inclusive a da tela aberta
   it('mostra todas as abas e marca só a ativa', () => {
     montar('fatura')
     const nav = screen.getByRole('navigation', { name: 'Principal' })
     expect(nav).toBeInTheDocument()
 
-    for (const nome of ['Resumo', 'Lançamentos', 'Importar']) {
+    for (const nome of ['Resumo', 'Lançamentos', 'Renda', 'Importar']) {
       expect(screen.getByRole('button', { name: nome })).not.toHaveAttribute('aria-current')
     }
     expect(screen.getByRole('button', { name: 'Fatura' })).toHaveAttribute('aria-current', 'page')

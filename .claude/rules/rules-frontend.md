@@ -18,7 +18,11 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   messages go through `errorMessage`: a string `detail` is shown as is, and the list a 422
   brings (Pydantic errors, in English) becomes one Portuguese sentence per error, from the
   error `type` and the field's label in `FIELD_LABELS` — a new form field needs its label
-  there, or it falls back to a generic sentence. Covered by `api.test.ts`.
+  there, or it falls back to a generic sentence. A `value_error` is the exception: it comes
+  from a server-side validator already written in Portuguese, so its `msg` is shown without
+  Pydantic's "Value error, " prefix. Every failed request other than a 401 throws `ApiError`,
+  which carries the HTTP `status` — `IncomeScreen` tells the 409 of a repeated income apart
+  by it. Covered by `api.test.ts`.
 - **`state/auth-context.tsx`** — `AuthProvider` wraps the app in `main.tsx` and owns `user`,
   `loading`, `error`. On mount, if a token exists it calls `/auth/me` to rehydrate the session.
   `useAuth()` throws outside the provider. All screens read auth state from here, never from
@@ -49,8 +53,11 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   `formatCurrency()` (those three plus `ImportScreen` and `TrendChart`), `formatPercent()`
   (`SummaryScreen`), `shiftMonth()` (`MonthNav`, which every month stepper goes
   through), `formatMonthShort()` and `formatCurrencyInteger()` (`TrendChart`, the axis shows whole
-  reais) and `formatDayMonth()` (`ImportScreen`, which
-  shows a statement line as `21/09` — the year is noise inside one statement). Money and
+  reais), `formatDayMonth()` (`ImportScreen`, which
+  shows a statement line as `21/09` — the year is noise inside one statement; also the
+  payment days in `SummaryScreen` and the next date in `IncomeScreen`), `formatDate()`
+  (`dd/mm/aaaa`, an income's period) and `todayIso()` (the device's local date, sent as
+  `today` to `GET /incomes` so the next payment date follows the user's day, not UTC's). Money and
   percentages go through `Intl.NumberFormat('pt-BR')`, so they read `4.057,30` and `49,4%` —
   never format a number inline in a screen.
 - **`presentation/components/`** (outside `ui/`) — `Page` is the shell every authenticated
@@ -88,11 +95,14 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   hand-written, so they do **not** catch a backend contract change — a field can disappear from
   `Summary` and the test stays green. The gap is wider than it looks for the OFX upload: the
   multipart request itself is never exercised here (vitest mocks `@/data/api`) nor in pytest
-  (which runs no JavaScript), so that seam is only ever checked by hand.
-- **`App.tsx`** — route table only (`/login`, `/`, `/lancamentos`, `/fatura`, `/importar`,
-  `/configuracoes`), via `react-router`. `main.tsx` wraps the app in `BrowserRouter` +
+  (which runs no JavaScript), so that seam is only ever checked by hand. A Base UI `Checkbox`
+  renders a button and a hidden input with the same label, so `getByLabelText` finds two —
+  query it with `getByRole('checkbox', { name })`.
+- **`App.tsx`** — route table only (`/login`, `/`, `/lancamentos`, `/fatura`, `/renda`,
+  `/importar`, `/configuracoes`), via `react-router`. `main.tsx` wraps the app in `BrowserRouter` +
   `AuthProvider`. Screens live one per file in `src/presentation/pages/` (`LoginScreen`,
-  `SummaryScreen`, `EntryScreen`, `InvoiceScreen`, `ImportScreen`, `ConfigScreen`). A new screen
+  `SummaryScreen`, `EntryScreen`, `InvoiceScreen`, `IncomeScreen`, `ImportScreen`,
+  `ConfigScreen`). A new screen
   also needs its tab in `Header.tsx` — the route alone leaves it unreachable. Navigate with
   `useNavigate()`, not `<Link>` — the shadcn `Button` (Base UI) has no confirmed support for
   rendering as another element (Radix's `asChild`).
@@ -100,7 +110,7 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
 ### Money in the frontend
 
 FastAPI serializes `Decimal` as a **string**, so every money field the API *returns* is typed
-`string`; money the API *accepts* (`EntryCreate.amount`, `IncomeIn.amount`) is
+`string`; money the API *accepts* (`EntryCreate.amount`, `IncomeIn.parts[].amount`) is
 `number | string`, because Pydantic parses either. Always `Number(value)` before arithmetic or
 formatting, and send money back as the string the user typed, never a computed JS float — the
 backend parses it into `Decimal` exactly.
