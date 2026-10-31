@@ -659,6 +659,13 @@ class TestEdicao:
     def test_lancamento_inexistente_responde_404(self, client, auth):
         assert client.patch("/entries/999", headers=auth(), json={}).status_code == 404
 
+    @pytest.mark.parametrize("rota", ["/entries/{}"])
+    def test_id_acima_da_coluna_e_recusado_em_vez_de_500(self, client, auth, rota):
+        """O id é `integer` no Postgres: 2**31 estourava a consulta e respondia 500."""
+        h = auth()
+        for id_ in (2**31, 2**63):
+            assert client.delete(rota.format(id_), headers=h).status_code == 422
+
     def test_trocar_para_entrada_num_lancamento_no_credito_e_recusado(self, client, auth):
         """O PATCH em si é válido; o lançamento que resultaria dele, não."""
         headers = auth()

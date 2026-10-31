@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from datetime import UTC, date, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, UploadFile, status
 from fastapi.exceptions import RequestValidationError
@@ -41,6 +42,9 @@ router = APIRouter(tags=["finance"])
 # e um ano qualquer (0001, 9999) deixaria cada requisição segundos ocupada. O ano 0000
 # nem existe para o Python.
 MONTH = r"^(19\d{2}|2[01]\d{2})-(0[1-9]|1[0-2])$"
+
+# Os ids são `integer` no Postgres: um id acima disso estoura a consulta e vira 500.
+Id = Annotated[int, Path(le=2**31 - 1)]
 
 # Um extrato OFX de um mês tem alguns KB. O limite existe para que um upload grande não
 # vire memória do processo antes de qualquer validação, não porque 2 MB seja apertado.
@@ -124,7 +128,7 @@ def list_entries(
 
 @router.patch("/entries/{entry_id}", response_model=EntryOut)
 def update(
-    entry_id: int,
+    entry_id: Id,
     data: EntryUpdate,
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
@@ -150,7 +154,7 @@ def update(
 
 @router.delete("/entries/{entry_id}", status_code=204)
 def remove(
-    entry_id: int,
+    entry_id: Id,
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ):
