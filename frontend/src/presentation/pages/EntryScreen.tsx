@@ -1,26 +1,29 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { RiPencilLine } from '@remixicon/react'
 import { api } from '@/data/api'
-import { currentMonth, formatCurrency } from '@/shared/format'
-import { GASTO_CATEGORIES, ENTRADA_CATEGORIES } from '@/shared/categories'
+import { currentMonth, formatCurrency, todayIso } from '@/shared/format'
 import type { EntryCreate, EntryMethod, EntryOut, EntryType, Summary } from '@/shared/types'
 import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
 import { Label } from '@/presentation/components/ui/label'
-import { NativeSelect, NativeSelectOption } from '@/presentation/components/ui/native-select'
-import { ToggleGroup, ToggleGroupItem } from '@/presentation/components/ui/toggle-group'
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
 import { Page } from '@/presentation/components/Page'
 import { MonthNav } from '@/presentation/components/MonthNav'
+import { ChoiceToggle } from '@/presentation/components/ChoiceToggle'
+import { CategorySelect } from '@/presentation/components/CategorySelect'
+import { RowActions } from '@/presentation/components/RowActions'
+import { MoneyRow } from '@/presentation/components/MoneyRow'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { StatusText } from '@/presentation/components/StatusText'
 
-/** Hoje no fuso de quem usa. Não use toISOString: ele dá a data em UTC, e no horário de
- *  Brasília isso já é o dia seguinte a partir das 21h. */
-function today() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
+const TYPES = [
+  { value: 'gasto', label: 'Gasto' },
+  { value: 'entrada', label: 'Entrada' },
+] as const satisfies readonly { value: EntryType; label: string }[]
+
+const METHODS = [
+  { value: 'avista', label: 'À vista' },
+  { value: 'credito', label: 'Crédito' },
+] as const satisfies readonly { value: EntryMethod; label: string }[]
 
 interface FormState {
   type: EntryType
@@ -51,7 +54,7 @@ function defaultForm(): FormState {
     amount: '',
     description: '',
     category: '',
-    date: today(),
+    date: todayIso(),
     method: 'avista',
     installments: '1',
   }
@@ -75,8 +78,6 @@ export function EntryScreen() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const descriptionRef = useRef<HTMLInputElement>(null)
 
-  const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [confirmingId, setConfirmingId] = useState<number | null>(null)
 
   useEffect(() => {
     let ativo = true
@@ -158,28 +159,17 @@ export function EntryScreen() {
     }
   }
 
-  function onDeleteClick(id: number) {
-    if (confirmingId === id) {
-      setConfirmingId(null)
-      setDeletingId(id)
-      api
-        .removeEntry(id)
-        .then(() => {
-          // apagou o que estava no formulário: não sobra nada para salvar
-          if (editingId === id) stopEditing()
-          reload()
-        })
-        .catch((e: Error) => setListError(e.message))
-        .finally(() => setDeletingId(null))
-    } else {
-      setConfirmingId(id)
-      setTimeout(() => {
-        setConfirmingId((current) => (current === id ? null : current))
-      }, 2000)
-    }
+  function remove(id: number) {
+    return api
+      .removeEntry(id)
+      .then(() => {
+        // apagou o que estava no formulário: não sobra nada para salvar
+        if (editingId === id) stopEditing()
+        reload()
+      })
+      .catch((e: Error) => setListError(e.message))
   }
 
-  const categories = form.type === 'gasto' ? GASTO_CATEGORIES : ENTRADA_CATEGORIES
 
   return (
     // no desktop: saldo + formulário à esquerda, grudados abaixo da navbar (--header-height + o
@@ -201,7 +191,7 @@ export function EntryScreen() {
                 </div>
                 <div className="flex items-center justify-between text-muted-foreground">
                   <dt>Saldo do mês</dt>
-                  <dd className="tabular-nums">R$ {formatCurrency(summary.month_balance)}</dd>
+                  <MoneyRow value={summary.month_balance} />
                 </div>
               </dl>
             </CardContent>
@@ -214,22 +204,13 @@ export function EntryScreen() {
               <CardTitle>{editingId === null ? 'Novo lançamento' : 'Editar lançamento'}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {/* clicar no já escolhido devolve []: o campo nunca fica sem valor */}
-              <ToggleGroup
+              <ChoiceToggle
                 aria-label="Tipo"
-                variant="outline"
-                spacing={0}
-                className="w-full"
-                value={[form.type]}
-                onValueChange={(v) => v[0] && updateForm('type', v[0] as EntryType)}
-              >
-                <ToggleGroupItem value="gasto" className="flex-1">
-                  Gasto
-                </ToggleGroupItem>
-                <ToggleGroupItem value="entrada" className="flex-1">
-                  Entrada
-                </ToggleGroupItem>
-              </ToggleGroup>
+                fill
+                options={TYPES}
+                value={form.type}
+                onChange={(v) => updateForm('type', v)}
+              />
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="description">Descrição</Label>
@@ -246,20 +227,14 @@ export function EntryScreen() {
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="category">Categoria</Label>
-                <NativeSelect
+                <CategorySelect
                   id="category"
-                  className="w-full"
+                  type={form.type}
                   value={form.category}
-                  onChange={(e) => updateForm('category', e.target.value)}
+                  onChange={(c) => updateForm('category', c)}
+                  placeholder="Selecione"
                   required
-                >
-                  <NativeSelectOption value="">Selecione</NativeSelectOption>
-                  {categories.map((c) => (
-                    <NativeSelectOption key={c} value={c}>
-                      {c}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -289,21 +264,13 @@ export function EntryScreen() {
               {form.type === 'gasto' && (
                 <div className="flex flex-col gap-1.5">
                   <Label id="method-label">Forma</Label>
-                  <ToggleGroup
+                  <ChoiceToggle
                     aria-labelledby="method-label"
-                    variant="outline"
-                    spacing={0}
-                    className="w-full"
-                    value={[form.method]}
-                    onValueChange={(v) => v[0] && updateForm('method', v[0] as EntryMethod)}
-                  >
-                    <ToggleGroupItem value="avista" className="flex-1">
-                      À vista
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="credito" className="flex-1">
-                      Crédito
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                    fill
+                    options={METHODS}
+                    value={form.method}
+                    onChange={(v) => updateForm('method', v)}
+                  />
                 </div>
               )}
 
@@ -322,7 +289,7 @@ export function EntryScreen() {
                 </div>
               )}
 
-              {formError && <p className="text-sm text-destructive">{formError}</p>}
+              <ErrorText>{formError}</ErrorText>
 
               <Button type="submit" disabled={submitting}>
                 {submitting ? 'Salvando...' : 'Salvar'}
@@ -345,10 +312,10 @@ export function EntryScreen() {
           </div>
         </CardHeader>
         <CardContent>
-          {listLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-          {listError && <p className="text-sm text-destructive">{listError}</p>}
+          {listLoading && <StatusText>Carregando…</StatusText>}
+          <ErrorText>{listError}</ErrorText>
           {!listLoading && entries && entries.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhum lançamento neste mês.</p>
+            <StatusText>Nenhum lançamento neste mês.</StatusText>
           )}
           {entries && entries.length > 0 && (
             <ul className="flex flex-col divide-y divide-border">
@@ -372,25 +339,11 @@ export function EntryScreen() {
                       {entry.type === 'gasto' ? '-' : '+'}R${' '}
                       {formatCurrency(entry.amount)}
                     </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      aria-label={`Editar ${entry.description}`}
-                      title="Editar"
-                      onClick={() => startEditing(entry)}
-                    >
-                      <RiPencilLine />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={deletingId === entry.id}
-                      onClick={() => onDeleteClick(entry.id)}
-                    >
-                      {confirmingId === entry.id ? 'Confirmar?' : 'Excluir'}
-                    </Button>
+                    <RowActions
+                      name={entry.description}
+                      onEdit={() => startEditing(entry)}
+                      onDelete={() => remove(entry.id)}
+                    />
                   </div>
                 </li>
               ))}

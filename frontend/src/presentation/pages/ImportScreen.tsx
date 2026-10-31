@@ -1,14 +1,15 @@
 import { useState, type ChangeEvent } from 'react'
 import { api } from '@/data/api'
 import { formatCurrency, formatDayMonth } from '@/shared/format'
-import { GASTO_CATEGORIES, ENTRADA_CATEGORIES } from '@/shared/categories'
 import type { EntryImport, ImportPreviewItem, ImportResult } from '@/shared/types'
 import { Button } from '@/presentation/components/ui/button'
 import { Badge } from '@/presentation/components/ui/badge'
-import { NativeSelect, NativeSelectOption } from '@/presentation/components/ui/native-select'
 import { Checkbox } from '@/presentation/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
 import { Page } from '@/presentation/components/Page'
+import { CategorySelect } from '@/presentation/components/CategorySelect'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { StatusText } from '@/presentation/components/StatusText'
 
 /** Categoria inicial de toda linha lida. Um extrato tem dezenas de lançamentos;
  *  exigir escolha em cada um antes de importar transformaria a tela em trabalho. */
@@ -101,10 +102,10 @@ export function ImportScreen() {
           <CardTitle>Importar extrato</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <p className="text-sm text-muted-foreground">
+          <StatusText>
             Baixe o extrato em OFX pelo app do banco. Fatura de cartão não entra aqui — ela
             já é calculada a partir dos seus lançamentos no crédito.
-          </p>
+          </StatusText>
 
           <input
             type="file"
@@ -118,7 +119,7 @@ export function ImportScreen() {
             {busy && !review ? 'Lendo...' : 'Ler extrato'}
           </Button>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <ErrorText>{error}</ErrorText>
 
           {result && (
             <div className="flex flex-col gap-2">
@@ -141,9 +142,9 @@ export function ImportScreen() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {review.length === 0 && (
-              <p className="text-sm text-muted-foreground">
+              <StatusText>
                 O extrato não tem nenhum lançamento.
-              </p>
+              </StatusText>
             )}
 
             {review.length > 0 && (
@@ -178,20 +179,12 @@ export function ImportScreen() {
                     </div>
 
                     {include && (
-                      <NativeSelect
+                      <CategorySelect
                         aria-label={`Categoria de ${line.description}`}
-                        className="w-full"
+                        type={line.type}
                         value={category}
-                        onChange={(e) => update(line.import_id, { category: e.target.value })}
-                      >
-                        {(line.type === 'gasto' ? GASTO_CATEGORIES : ENTRADA_CATEGORIES).map(
-                          (c) => (
-                            <NativeSelectOption key={c} value={c}>
-                              {c}
-                            </NativeSelectOption>
-                          ),
-                        )}
-                      </NativeSelect>
+                        onChange={(c) => update(line.import_id, { category: c })}
+                      />
                     )}
                   </li>
                 ))}

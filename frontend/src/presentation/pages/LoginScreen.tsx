@@ -4,6 +4,7 @@ import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
 import { Label } from '@/presentation/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
+import { ErrorText } from '@/presentation/components/ErrorText'
 
 export function LoginScreen() {
   const { login, register, error } = useAuth()
@@ -60,7 +61,7 @@ export function LoginScreen() {
                 minLength={mode === 'register' ? 8 : undefined}
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <ErrorText>{error}</ErrorText>
             <Button type="submit" disabled={submitting}>
               {submitting
                 ? 'Enviando...'

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { RiAddLine, RiDeleteBinLine, RiPencilLine } from '@remixicon/react'
+import { RiAddLine, RiDeleteBinLine } from '@remixicon/react'
 import { ApiError, api } from '@/data/api'
 import { formatCurrency, formatDate, formatDayMonth, todayIso } from '@/shared/format'
 import type { Income, IncomeIn, IncomePart, PaydayRule } from '@/shared/types'
@@ -18,6 +18,9 @@ import {
   DialogTitle,
 } from '@/presentation/components/ui/dialog'
 import { Page } from '@/presentation/components/Page'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { RowActions } from '@/presentation/components/RowActions'
+import { StatusText } from '@/presentation/components/StatusText'
 
 // os mesmos limites do servidor (schemas.py): o formulário só evita a ida e volta
 const MAX_PARTS = 4
@@ -286,7 +289,7 @@ export function IncomeScreen() {
               </p>
             </fieldset>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <ErrorText>{error}</ErrorText>
             <div className="flex gap-2">
               <Button type="submit" className="flex-1" disabled={saving}>
                 {saving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Registrar renda'}
@@ -306,9 +309,9 @@ export function IncomeScreen() {
           <CardTitle>Rendas registradas</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {listError && <p className="text-sm text-destructive">{listError}</p>}
+          <ErrorText>{listError}</ErrorText>
           {incomes && incomes.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhuma renda registrada.</p>
+            <StatusText>Nenhuma renda registrada.</StatusText>
           )}
           {incomes && incomes.length > 0 && (
             <ul aria-label="Rendas registradas" className="flex flex-col divide-y">
@@ -318,27 +321,13 @@ export function IncomeScreen() {
                   <li key={income.id} className="flex flex-col gap-2 py-3 first:pt-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{period}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="ml-auto"
-                        aria-label={`Editar renda ${period.toLowerCase()}`}
-                        title="Editar"
-                        onClick={() => edit(income)}
-                      >
-                        <RiPencilLine />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Apagar renda ${period.toLowerCase()}`}
-                        title="Apagar"
-                        onClick={() => remove(income)}
-                      >
-                        <RiDeleteBinLine />
-                      </Button>
+                      <div className="ml-auto">
+                        <RowActions
+                          name={`renda ${period.toLowerCase()}`}
+                          onEdit={() => edit(income)}
+                          onDelete={() => remove(income)}
+                        />
+                      </div>
                     </div>
                     <ul className="flex flex-col gap-1 text-sm">
                       {income.parts.map((part, i) => (

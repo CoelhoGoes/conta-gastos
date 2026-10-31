@@ -206,11 +206,11 @@ describe('EntryScreen', () => {
       montar()
       await screen.findByText('feira')
 
-      await user.click(screen.getByRole('button', { name: 'Excluir' }))
+      await user.click(screen.getByRole('button', { name: 'Excluir feira' }))
       expect(api.removeEntry).not.toHaveBeenCalled()
-      expect(screen.getByRole('button', { name: 'Confirmar?' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Confirmar exclusão de feira' })).toBeInTheDocument()
 
-      await user.click(screen.getByRole('button', { name: 'Confirmar?' }))
+      await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de feira' }))
       await waitFor(() => expect(api.removeEntry).toHaveBeenCalledWith(1))
     })
 
@@ -219,8 +219,8 @@ describe('EntryScreen', () => {
       montar()
       await screen.findByText('feira')
 
-      await user.click(screen.getByRole('button', { name: 'Excluir' }))
-      await user.click(screen.getByRole('button', { name: 'Confirmar?' }))
+      await user.click(screen.getByRole('button', { name: 'Excluir feira' }))
+      await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de feira' }))
       await waitFor(() => expect(api.entries).toHaveBeenCalledTimes(2))
     })
   })
@@ -300,8 +300,8 @@ describe('EntryScreen', () => {
       montar()
 
       await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      await user.click(screen.getByRole('button', { name: 'Excluir' }))
-      await user.click(screen.getByRole('button', { name: 'Confirmar?' }))
+      await user.click(screen.getByRole('button', { name: 'Excluir feira' }))
+      await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de feira' }))
 
       expect(await screen.findByText('Novo lançamento')).toBeInTheDocument()
       expect(screen.getByLabelText('Descrição')).toHaveValue('')

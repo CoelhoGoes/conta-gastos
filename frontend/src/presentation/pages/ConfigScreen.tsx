@@ -6,8 +6,10 @@ import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
 import { Label } from '@/presentation/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
-import { ToggleGroup, ToggleGroupItem } from '@/presentation/components/ui/toggle-group'
 import { Page } from '@/presentation/components/Page'
+import { ChoiceToggle } from '@/presentation/components/ChoiceToggle'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { StatusText } from '@/presentation/components/StatusText'
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: 'system', label: 'Sistema' },
@@ -90,9 +92,9 @@ export function ConfigScreen() {
                 </p>
               </div>
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              <ErrorText>{error}</ErrorText>
               {saved && !error && (
-                <p className="text-sm text-muted-foreground">Configurações salvas.</p>
+                <StatusText>Configurações salvas.</StatusText>
               )}
 
               <Button type="submit" disabled={saving}>
@@ -110,20 +112,12 @@ export function ConfigScreen() {
           </CardHeader>
           <CardContent className="flex flex-col gap-1.5">
             <Label id="theme-label">Tema</Label>
-            <ToggleGroup
+            <ChoiceToggle
               aria-labelledby="theme-label"
-              variant="outline"
-              spacing={0}
-              value={[theme]}
-              // clicar no já escolhido devolve []: o tema nunca fica sem valor
-              onValueChange={(v) => v[0] && chooseTheme(v[0] as Theme)}
-            >
-              {THEMES.map((t) => (
-                <ToggleGroupItem key={t.value} value={t.value}>
-                  {t.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+              options={THEMES}
+              value={theme}
+              onChange={chooseTheme}
+            />
             <p className="text-xs text-muted-foreground">
               Vale só para este aparelho. "Sistema" acompanha o modo claro ou escuro do aparelho.
             </p>
@@ -136,11 +130,11 @@ export function ConfigScreen() {
           </CardHeader>
           <CardContent>
             <form onSubmit={onDelete} className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">
+              <StatusText>
                 A conta deixa de funcionar na hora e você sai do app. Seus lançamentos não
                 aparecem mais em lugar nenhum, e o e-mail fica livre para um cadastro novo, que
                 começa vazio.
-              </p>
+              </StatusText>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="delete-password">Confirme com sua senha</Label>
                 <Input
@@ -152,7 +146,7 @@ export function ConfigScreen() {
                   required
                 />
               </div>
-              {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+              <ErrorText>{deleteError}</ErrorText>
               <Button type="submit" variant="destructive" disabled={deleting}>
                 {deleting ? 'Excluindo...' : 'Excluir minha conta'}
               </Button>

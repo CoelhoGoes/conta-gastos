@@ -16,6 +16,10 @@ import {
 import { Page } from '@/presentation/components/Page'
 import { MonthNav } from '@/presentation/components/MonthNav'
 import { ChartSwatch } from '@/presentation/components/ChartSwatch'
+import { CategoryTotal } from '@/presentation/components/CategoryTotal'
+import { MoneyRow } from '@/presentation/components/MoneyRow'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { StatusText } from '@/presentation/components/StatusText'
 // recharts é pesado e só esta seção usa: carrega em separado, sem bloquear a tela
 const TrendChart = lazy(() =>
   import('@/presentation/components/TrendChart').then((m) => ({ default: m.TrendChart })),
@@ -66,24 +70,6 @@ function allCategories(categories: CategoryBreakdown[], summary: Summary | null)
   }
 }
 
-function CategoryTotal({ category }: { category: CategoryBreakdown }) {
-  return (
-    <>
-      R$ {formatCurrency(category.total)} · {formatPercent(category.share)} do gasto do mês
-    </>
-  )
-}
-
-
-function Money({ value, signal }: { value: string; signal?: '+' | '-' }) {
-  return (
-    <dd className="tabular-nums">
-      {signal && <span className="text-muted-foreground">{signal} </span>}
-      R$ {formatCurrency(value)}
-    </dd>
-  )
-}
-
 export function SummaryScreen() {
   const navigate = useNavigate()
   const [month, setMonth] = useState(currentMonth())
@@ -113,17 +99,17 @@ export function SummaryScreen() {
 
   return (
     <Page active="resumo">
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {loading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+      <ErrorText>{error}</ErrorText>
+      {loading && <StatusText>Carregando…</StatusText>}
 
       {summary && Number(summary.monthly_income) === 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/50 p-4">
           <div className="flex gap-2">
             <RiInformationLine className="mt-0.5 shrink-0 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
+            <StatusText>
               Nenhuma renda mensal vale para este mês, então o saldo dele está sendo calculado
               como se ela fosse zero.
-            </p>
+            </StatusText>
           </div>
           <Button
             type="button"
@@ -160,14 +146,14 @@ export function SummaryScreen() {
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <dt>Saldo do mês</dt>
-                  <dd className="tabular-nums">R$ {formatCurrency(summary.month_balance)}</dd>
+                  <MoneyRow value={summary.month_balance} />
                 </div>
               </dl>
 
               <dl className="flex flex-col gap-2 border-t pt-4 text-sm">
                 <div className="flex flex-wrap justify-between">
                   <dt className="text-muted-foreground">Renda mensal</dt>
-                  <Money value={summary.monthly_income} />
+                  <MoneyRow value={summary.monthly_income} />
                   {/* de onde veio a renda: o salário de 30/10 que conta em novembro aparece aqui */}
                   {summary.income_payments.length > 0 && (
                     <dd className="mt-1 w-full">
@@ -190,19 +176,19 @@ export function SummaryScreen() {
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Entradas extras</dt>
-                  <Money value={summary.extra_income} signal="+" />
+                  <MoneyRow value={summary.extra_income} signal="+" />
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Gastos à vista</dt>
-                  <Money value={summary.cash_expenses} signal="-" />
+                  <MoneyRow value={summary.cash_expenses} signal="-" />
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Fatura do cartão</dt>
-                  <Money value={summary.invoice} signal="-" />
+                  <MoneyRow value={summary.invoice} signal="-" />
                 </div>
                 <div className="flex justify-between border-t pt-2 font-medium">
                   <dt>Gasto total do mês</dt>
-                  <Money value={summary.total_spent} />
+                  <MoneyRow value={summary.total_spent} />
                 </div>
               </dl>
             </CardContent>
@@ -216,12 +202,12 @@ export function SummaryScreen() {
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               {categories.length === 0 && (
-                <p className="text-sm text-muted-foreground">Nenhum gasto neste mês.</p>
+                <StatusText>Nenhum gasto neste mês.</StatusText>
               )}
 
               {slices.length > 0 && (
                 <>
-                  <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
+                  <Suspense fallback={<StatusText>Carregando…</StatusText>}>
                     <CategoryDonut
                       data={slices.map((s) => ({
                         category: s.label,
@@ -316,7 +302,7 @@ export function SummaryScreen() {
             <CardTitle>Tendência</CardTitle>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
+            <Suspense fallback={<StatusText>Carregando…</StatusText>}>
               <TrendChart until={month} />
             </Suspense>
           </CardContent>

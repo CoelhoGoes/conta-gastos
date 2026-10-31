@@ -7,6 +7,8 @@ import { NativeSelect, NativeSelectOption } from '@/presentation/components/ui/n
 import { ChartTooltipRow } from '@/presentation/components/ChartTooltipRow'
 import { EdgeToEdgeCurve } from '@/presentation/components/EdgeToEdgeCurve'
 import { LineIcon } from '@/presentation/components/LineIcon'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { StatusText } from '@/presentation/components/StatusText'
 import {
   ChartContainer,
   ChartLegend,
@@ -105,8 +107,8 @@ export function TrendChart({ until }: { until: string }) {
         ))}
       </NativeSelect>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {!points && !error && <p className="text-sm text-muted-foreground">Carregando…</p>}
+      <ErrorText>{error}</ErrorText>
+      {!points && !error && <StatusText>Carregando…</StatusText>}
 
       {points && (
         <ChartContainer config={config} className="h-64 w-full">

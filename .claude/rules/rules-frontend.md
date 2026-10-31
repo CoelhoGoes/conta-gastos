@@ -60,7 +60,14 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   `today` to `GET /incomes` so the next payment date follows the user's day, not UTC's). Money and
   percentages go through `Intl.NumberFormat('pt-BR')`, so they read `4.057,30` and `49,4%` —
   never format a number inline in a screen.
-- **`presentation/components/`** (outside `ui/`) — `Page` is the shell every authenticated
+- **`presentation/components/`** (outside `ui/`) — a screen builds on these instead of
+  repeating markup; a piece used by one screen only still gets its own file here when it is
+  reusable (`MoneyRow`, `CategoryTotal`). The small ones: `ErrorText` (red error line, renders
+  nothing without a message), `StatusText` (muted line: loading, empty list, a field's hint),
+  `ChoiceToggle` and `CategorySelect` (see **Closed-choice fields**), `MoneyRow` (the "R$ x"
+  `<dd>` of a summary row) and `CategoryTotal`. `RowActions` is the edit + delete pair of a list
+  row (`EntryScreen`, `IncomeScreen`): delete asks for a second click within 2 s and stays
+  disabled until `onDelete`'s promise settles. `Page` is the shell every authenticated
   screen mounts: `Header` plus a `<main>` capped at `max-w-6xl`; each screen passes its own
   `md:grid` (or a narrower `max-w-3xl`) through `className`, and below `md` everything is one
   column in the phone's order. `Header` is the full-width sticky nav bar: from `md` it fits one
@@ -89,7 +96,7 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   class on `ChartContainer` does nothing.
 - **Tests** — `npm test` (vitest + jsdom, config in `vite.config.ts`). `shared/format.test.ts`
   covers the pure helpers; every screen and the shared components with behaviour (`Header`,
-  `MonthNav`, `TrendChart`, `CategoryDonut`) have a `.test.tsx` beside them, rendering with
+  `MonthNav`, `TrendChart`, `CategoryDonut`, `RowActions`) have a `.test.tsx` beside them, rendering with
   `@testing-library/react` and mocking `@/data/api`. Mock fixtures are typed against
   `shared/types.ts`, so a fixture with a wrong field type fails `npm run build`. Those mocks are
   hand-written, so they do **not** catch a backend contract change — a field can disappear from
@@ -138,11 +145,12 @@ backend parses it into `Decimal` exactly.
   (`src/presentation/components/ui/`). `Chart` wraps recharts — that is why the charts are
   lazy-loaded (see the `presentation/components/` item above). Install more with the shadcn CLI
   (`npx shadcn@latest add <name>`) rather than writing them by hand.
-- **Closed-choice fields**: category (in `EntryScreen` and on each `ImportScreen` line) is a
-  `NativeSelect`, not the Base UI `Select` popup — a real `<select>` keeps the phone's native
-  picker, the form's `required` and `selectOptions` in tests. Two-option choices (type, method,
-  theme) are a `ToggleGroup` with a group label; `onValueChange` ignores the empty array a
-  second click on the chosen item sends, so the field never ends up empty.
+- **Closed-choice fields**: category (in `EntryScreen` and on each `ImportScreen` line) is
+  `CategorySelect`, a `NativeSelect` and not the Base UI `Select` popup — a real `<select>`
+  keeps the phone's native picker, the form's `required` and `selectOptions` in tests. Choices
+  among a few options (type, method, theme) are `ChoiceToggle`, a `ToggleGroup` with a group
+  label whose `onValueChange` ignores the empty array a second click on the chosen item sends,
+  so the field never ends up empty.
 - **Local edits to shadcn files** — re-apply them if a component is reinstalled with
   `--overwrite`: `native-select.tsx` uses `text-base md:text-sm` like `Input` (shadcn ships
   `text-sm`, and below 16px iOS Safari zooms the page on focus); `toggle.tsx` styles the pressed

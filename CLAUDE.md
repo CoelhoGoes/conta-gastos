@@ -138,6 +138,13 @@ frontend/
     │       ├── ChartTooltipRow.tsx  "name … R$ value" tooltip row
     │       ├── LineIcon.tsx       line/dashed marker for line series in legend and tooltip
     │       ├── EdgeToEdgeCurve.tsx  Line shape that stretches a series to the chart edges
+    │       ├── ErrorText.tsx      red error line under a form or list
+    │       ├── StatusText.tsx     muted line: loading, empty list, a field's hint
+    │       ├── ChoiceToggle.tsx   single-choice ToggleGroup that never ends up empty
+    │       ├── CategorySelect.tsx closed category list for a gasto or an entrada
+    │       ├── MoneyRow.tsx       "R$ x" value of a <dl> row, optional +/- sign
+    │       ├── CategoryTotal.tsx  "R$ x · y% do gasto do mês"
+    │       ├── RowActions.tsx     edit + delete (second click confirms) of a list row
     │       └── ui/            shadcn components: badge, button, card, chart, checkbox,
     │                          dialog, input, label, native-select, table, toggle,
     │                          toggle-group
@@ -202,7 +209,7 @@ npm run gen:types  # regenerate src/shared/api-schema.d.ts from the running API
 pip install -r backend/requirements-dev.txt   # once
 cd backend && pytest                          # 221 tests (3 skipped on sqlite), ~30s
 
-cd frontend && npm test                       # 143 tests, ~6s
+cd frontend && npm test                       # 146 tests, ~6s
 ```
 
 `backend/tests/test_service.py` needs no database: `service.py` is pure, so the tests use plain

@@ -13,6 +13,8 @@ import {
 } from '@/presentation/components/ui/table'
 import { Page } from '@/presentation/components/Page'
 import { MonthNav } from '@/presentation/components/MonthNav'
+import { ErrorText } from '@/presentation/components/ErrorText'
+import { StatusText } from '@/presentation/components/StatusText'
 
 export function InvoiceScreen() {
   const [month, setMonth] = useState(currentMonth())
@@ -47,10 +49,10 @@ export function InvoiceScreen() {
           </div>
         </CardHeader>
         <CardContent>
-          {listLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-          {listError && <p className="text-sm text-destructive">{listError}</p>}
+          {listLoading && <StatusText>Carregando…</StatusText>}
+          <ErrorText>{listError}</ErrorText>
           {!listLoading && invoice && invoice.items.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhuma parcela nesta fatura.</p>
+            <StatusText>Nenhuma parcela nesta fatura.</StatusText>
           )}
           {invoice && invoice.items.length > 0 && (
             <>

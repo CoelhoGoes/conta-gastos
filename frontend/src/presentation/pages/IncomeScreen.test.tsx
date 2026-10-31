@@ -226,12 +226,14 @@ describe('IncomeScreen', () => {
     expect(await screen.findByText('Nova renda')).toBeInTheDocument()
   })
 
-  // UC6
-  it('apaga uma renda pelo botão da linha', async () => {
+  // UC6: como em lançamentos, o primeiro clique só pede confirmação
+  it('apaga uma renda pelo botão da linha, depois de confirmar', async () => {
     const user = userEvent.setup()
     montar()
     await lista()
-    await user.click(screen.getByRole('button', { name: 'Apagar renda desde 01/01/2026' }))
+    await user.click(screen.getByRole('button', { name: 'Excluir renda desde 01/01/2026' }))
+    expect(api.removeIncome).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de renda desde 01/01/2026' }))
     expect(api.removeIncome).toHaveBeenCalledWith(1)
     await waitFor(() => expect(screen.queryByText('Desde 01/01/2026')).not.toBeInTheDocument())
   })
@@ -242,7 +244,8 @@ describe('IncomeScreen', () => {
     vi.mocked(api.removeIncome).mockRejectedValueOnce(new ApiError(404, 'Renda não encontrada.'))
     montar()
     await lista()
-    await user.click(screen.getByRole('button', { name: 'Apagar renda desde 01/01/2026' }))
+    await user.click(screen.getByRole('button', { name: 'Excluir renda desde 01/01/2026' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de renda desde 01/01/2026' }))
     expect(await screen.findByText('Renda não encontrada.')).toBeInTheDocument()
   })
 

@@ -152,7 +152,7 @@ cd frontend && npx -y knip                    # código e dependências sem uso 
 pip install -r backend/requirements-dev.txt   # uma vez
 cd backend && pytest                          # 221 testes (3 pulados em sqlite), ~30s
 
-cd frontend && npm test                       # 143 testes, ~6s
+cd frontend && npm test                       # 146 testes, ~6s
 ```
 
 Os testes de `backend/tests/test_service.py` e `test_ofx.py` não precisam de banco —
@@ -214,6 +214,13 @@ frontend/
     │       ├── ChartTooltipRow.tsx  linha "nome … R$ valor" dos tooltips
     │       ├── LineIcon.tsx       traço das séries de linha na legenda e no tooltip
     │       ├── EdgeToEdgeCurve.tsx  estica uma linha do gráfico até as bordas
+    │       ├── ErrorText.tsx      linha de erro em vermelho
+    │       ├── StatusText.tsx     linha cinza: carregando, lista vazia, dica de campo
+    │       ├── ChoiceToggle.tsx   escolha única entre poucas opções, nunca fica vazia
+    │       ├── CategorySelect.tsx seletor de categoria do gasto ou da entrada
+    │       ├── MoneyRow.tsx       valor "R$ x" de uma linha de resumo
+    │       ├── CategoryTotal.tsx  "R$ x · y% do gasto do mês"
+    │       ├── RowActions.tsx     editar e excluir (com confirmação) numa linha de lista
     │       └── ui/             componentes shadcn (badge, button, card, chart, checkbox,
     │                           dialog, input, label, native-select, table, toggle,
     │                           toggle-group)
