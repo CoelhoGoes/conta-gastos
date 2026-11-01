@@ -16,7 +16,12 @@ usuário é registrado no `CHANGELOG.md`.
 
 Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do código.
 
-Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
+- [ ] Dar ao `Base` (`infra/database.py`) uma `naming_convention` no padrão do SQLAlchemy
+      (`pk_…`, `fk_…`, `uq_…`, `ck_…`), para o autogenerate nomear as constraints — hoje ele
+      gera `drop_constraint(None, …)` para FK e a migração precisa nomeá-la à mão. Exige uma
+      migração que renomeie as PKs e FKs atuais, que têm o nome padrão do Postgres; o
+      `alembic check` não compara esses nomes, então sem ela o banco diverge do código sem
+      aviso. Decidido na validação da categoria no servidor, 01/11/2026
 
 ## Depois
 
@@ -44,12 +49,6 @@ Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
 - [ ] Avaliar se o próprio usuário pode criar categorias personalizadas, além das listas fechadas.
       Viabilidade ainda não avaliada. Ficou de fora da validação da categoria no servidor,
       01/11/2026 — que criou a tabela `categorias`, hoje global (sem `usuario_id`)
-- [ ] Dar ao `Base` (`infra/database.py`) uma `naming_convention` no padrão do SQLAlchemy
-      (`pk_…`, `fk_…`, `uq_…`, `ck_…`), para o autogenerate nomear as constraints — hoje ele
-      gera `drop_constraint(None, …)` para FK e a migração precisa nomeá-la à mão. Exige uma
-      migração que renomeie as PKs e FKs atuais, que têm o nome padrão do Postgres; o
-      `alembic check` não compara esses nomes, então sem ela o banco diverge do código sem
-      aviso. Decidido na validação da categoria no servidor, 01/11/2026
 - [ ] Deploy: backend em Railway / Render / Fly.io; frontend na Vercel
 - [ ] Limite de tamanho de corpo no servidor (uvicorn ou proxy) antes do deploy: o 413 do
       upload de OFX só dispara depois que o corpo inteiro chegou — limita a memória do
