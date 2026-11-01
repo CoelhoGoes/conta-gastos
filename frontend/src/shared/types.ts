@@ -28,6 +28,7 @@ export type Invoice = Schemas['Invoice']
 export type Summary = Schemas['Summary']
 export type CategoryItem = Schemas['CategoryItem']
 export type CategoryBreakdown = Schemas['CategoryBreakdown']
+export type Category = Schemas['CategoryOut']
 
 export type ImportPreviewItem = Schemas['ImportPreviewItem']
 export type EntryImport = Schemas['EntryImport']

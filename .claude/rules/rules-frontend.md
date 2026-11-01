@@ -22,7 +22,10 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   from a server-side validator already written in Portuguese, so its `msg` is shown without
   Pydantic's "Value error, " prefix. Every failed request other than a 401 throws `ApiError`,
   which carries the HTTP `status` — `IncomeScreen` tells the 409 of a repeated income apart
-  by it. Covered by `api.test.ts`.
+  by it. `categoryList()` (`GET /categories`) keeps the response promise in memory until
+  `logout()`, so the many `CategorySelect`s of an import make one request; a failed request is
+  not kept, the next call tries again. (`api.categoryBreakdown(month)` is a different thing: the
+  month's spending per category.) Covered by `api.test.ts`.
 - **`state/auth-context.tsx`** — `AuthProvider` wraps the app in `main.tsx` and owns `user`,
   `loading`, `error`. On mount, if a token exists it calls `/auth/me` to rehydrate the session.
   `useAuth()` throws outside the provider. All screens read auth state from here, never from
@@ -46,9 +49,6 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
 - **`shared/types.ts`** — short names for the generated types (`Summary`, `EntryOut`…) plus
   `EntryType`/`EntryMethod`, so the rest of `src/` imports from here and never from the
   generated file.
-- **`shared/categories.ts`** — `GASTO_CATEGORIES`/`ENTRADA_CATEGORIES`, hand-maintained
-  mirror of the closed lists in `docs/dominio.md` — nothing generates it. Keep both in sync,
-  don't invent a new category here without updating `docs/dominio.md` too.
 - **`shared/format.ts`** — `currentMonth()` (`SummaryScreen`, `EntryScreen`, `InvoiceScreen`),
   `formatCurrency()` (those three plus `ImportScreen` and `TrendChart`), `formatPercent()`
   (`SummaryScreen`), `shiftMonth()` (`MonthNav`, which every month stepper goes
@@ -82,7 +82,8 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
   stays out of the main bundle. `ChartSwatch` (colour square) and `ChartTooltipRow` ("name … R$
   value") are shared by both charts' tooltips and the donut legend. **Never use API data as a
   `ChartConfig` key**: shadcn's `ChartStyle` writes the keys raw into a `<style>` via
-  `dangerouslySetInnerHTML`, and the API accepts any category text — key by position
+  `dangerouslySetInnerHTML`. The API now only stores categories from the closed lists, but
+  that is a server rule this component should not lean on — key by position
   (`slice-0`…) and put the text in `label` (`CategoryDonut.test.tsx` guards this).
   `ChartTooltipRow` also takes a `marker` that replaces the square: `TrendChart` passes
   `LineIcon` (solid for both balances, dashed for income) so the tooltip repeats the legend's
@@ -97,7 +98,8 @@ importing none of them. The dependency rule is in `CLAUDE.md` → **Architecture
 - **Tests** — `npm test` (vitest + jsdom, config in `vite.config.ts`). `shared/format.test.ts`
   covers the pure helpers; every screen and the shared components with behaviour (`Header`,
   `MonthNav`, `TrendChart`, `CategoryDonut`, `RowActions`) have a `.test.tsx` beside them, rendering with
-  `@testing-library/react` and mocking `@/data/api`. Mock fixtures are typed against
+  `@testing-library/react` and mocking `@/data/api` (a screen with a `CategorySelect` mocks
+  `categoryList` too). Mock fixtures are typed against
   `shared/types.ts`, so a fixture with a wrong field type fails `npm run build`. Those mocks are
   hand-written, so they do **not** catch a backend contract change — a field can disappear from
   `Summary` and the test stays green. The gap is wider than it looks for the OFX upload: the
@@ -146,7 +148,9 @@ backend parses it into `Decimal` exactly.
   lazy-loaded (see the `presentation/components/` item above). Install more with the shadcn CLI
   (`npx shadcn@latest add <name>`) rather than writing them by hand.
 - **Closed-choice fields**: category (in `EntryScreen` and on each `ImportScreen` line) is
-  `CategorySelect`, a `NativeSelect` and not the Base UI `Select` popup — a real `<select>`
+  `CategorySelect`, which reads the lists from `api.categoryList()` (only a placeholder while
+  loading; an error line if they don't load, and `required` stops the save) — a `NativeSelect`
+  and not the Base UI `Select` popup — a real `<select>`
   keeps the phone's native picker, the form's `required` and `selectOptions` in tests. Choices
   among a few options (type, method, theme) are `ChoiceToggle`, a `ToggleGroup` with a group
   label whose `onValueChange` ignores the empty array a second click on the chosen item sends,

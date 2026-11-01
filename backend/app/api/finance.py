@@ -18,13 +18,15 @@ from ..domain.service import (
     is_income_on_credit,
     month_key,
     next_payment,
+    normalize_category,
     shift_month,
 )
 from ..infra.database import get_session
-from ..infra.models import Entry, Income, IncomePart, User
+from ..infra.models import Category, Entry, Income, IncomePart, User
 from .deps import current_user
 from .schemas import (
     CategoryBreakdown,
+    CategoryOut,
     EntryCreate,
     EntryImport,
     EntryOut,
@@ -126,6 +128,29 @@ def _reject_income_on_credit(data: EntryCreate) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Entrada não vai no crédito.")
 
 
+def _categories(session: Session) -> dict[str, dict[str, int]]:
+    """As categorias por tipo: `{"gasto": {"Mercado": 1, …}, "entrada": {…}}`."""
+    by_type: dict[str, dict[str, int]] = {"gasto": {}, "entrada": {}}
+    for c in session.scalars(select(Category)):
+        by_type[c.type][c.name] = c.id
+    return by_type
+
+
+def _category_id(
+    categories: dict[str, dict[str, int]], entry_type: str, category: str, line: str = ""
+) -> int:
+    """O id da categoria na lista do tipo, ou 422. Criação, edição e importação passam por
+    aqui. `line` diz qual linha da importação foi recusada."""
+    of_type = categories[entry_type]
+    listed = normalize_category(category, of_type)
+    if listed is None:
+        kind = "gastos" if entry_type == "gasto" else "entradas"
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"{line}Categoria fora da lista de {kind}."
+        )
+    return of_type[listed]
+
+
 def _parts(data: IncomeIn) -> list[IncomePart]:
     return [IncomePart(**p.model_dump()) for p in data.parts]
 
@@ -148,12 +173,22 @@ def create(
     session: Session = Depends(get_session),
 ):
     _reject_income_on_credit(data)
+    category_id = _category_id(_categories(session), data.type, data.category)
 
-    entry = Entry(user_id=user.id, **data.model_dump())
+    entry = Entry(user_id=user.id, category_id=category_id, **data.model_dump(exclude={"category"}))
     session.add(entry)
     session.commit()
     session.refresh(entry)
     return entry
+
+
+@router.get("/categories", response_model=list[CategoryOut])
+def list_categories(
+    user: User = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    """As listas fechadas, na ordem do seletor. Iguais para todas as contas."""
+    return list(session.scalars(select(Category).order_by(Category.type, Category.order)))
 
 
 @router.get("/entries", response_model=list[EntryOut])
@@ -189,8 +224,9 @@ def update(
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
     _reject_income_on_credit(merged)
+    entry.category_id = _category_id(_categories(session), merged.type, merged.category)
 
-    for field, value in merged.model_dump().items():
+    for field, value in merged.model_dump(exclude={"category"}).items():
         setattr(entry, field, value)
     session.commit()
     session.refresh(entry)
@@ -339,17 +375,27 @@ def confirm_import(
     session: Session = Depends(get_session),
 ):
     """Grava as linhas revisadas, pulando o que já existe."""
+    # Antes de gravar qualquer linha: uma recusada derruba o lote inteiro.
+    categories = _categories(session)
+    category_ids = [
+        _category_id(
+            categories, item.type, item.category, f"“{item.description}” em {item.date:%d/%m/%Y}: "
+        )
+        for item in data
+    ]
     known = _known_import_ids(session, user, [item.import_id for item in data])
 
     created: list[Entry] = []
     seen: set[str] = set()
-    for item in data:
+    for item, category_id in zip(data, category_ids, strict=True):
         # `seen` cobre o duplicado dentro do próprio lote; `known`, o de importação
         # anterior. Sem os dois, a restrição única estoura como erro 500.
         if item.import_id in known or item.import_id in seen:
             continue
         seen.add(item.import_id)
-        entry = Entry(user_id=user.id, **item.model_dump())
+        entry = Entry(
+            user_id=user.id, category_id=category_id, **item.model_dump(exclude={"category"})
+        )
         session.add(entry)
         created.append(entry)
 

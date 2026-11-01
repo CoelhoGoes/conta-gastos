@@ -4,12 +4,27 @@
 TYPE_CHECKING. Por isso os testes de regra de negócio usam dublês simples, sem
 SQLAlchemy, sem Postgres e sem sqlite.
 """
+import importlib.util
 import os
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
+
+
+def _migration_categories() -> dict[str, list[str]]:
+    """As listas como a migração as semeia. O sqlite dos testes nasce do `create_all`, sem
+    migração, então a tabela `categorias` chegaria vazia; importar daqui mantém uma cópia só."""
+    path = next(Path(__file__).parent.parent.glob("alembic/versions/98844844bbad_*.py"))
+    spec = importlib.util.spec_from_file_location("migracao_categorias", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.CATEGORIES
+
+
+CATEGORIES = _migration_categories()
 
 
 @dataclass
@@ -103,6 +118,13 @@ def client(monkeypatch, tmp_path):
     from app.infra.database import Base, engine
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    from app.infra.models import Category
+    with engine.begin() as conn:
+        conn.execute(Category.__table__.insert(), [
+            {"tipo": tipo, "nome": nome, "ordem": ordem}
+            for tipo, nomes in CATEGORIES.items()
+            for ordem, nome in enumerate(nomes, start=1)
+        ])
 
     with TestClient(main.app) as c:
         yield c

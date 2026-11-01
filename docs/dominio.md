@@ -10,7 +10,8 @@ Leia antes de mexer em qualquer coisa em `service.py`.
 ## Conceitos
 
 **Lançamento** (`Entry`, tabela `lancamentos`) — qualquer movimento de dinheiro. Tem tipo,
-valor, descrição, categoria, data e forma de pagamento. O que veio de um extrato importado
+valor, descrição, categoria, data e forma de pagamento. A categoria é uma referência
+(`categoria_id`) a uma linha da tabela `categorias`. O que veio de um extrato importado
 guarda também a origem (`import_id`); o que foi digitado tem origem nula.
 
 **Tipo** — `gasto` (saída) ou `entrada` (receita).
@@ -70,6 +71,11 @@ repetidos em outro lugar.
 Estas são as listas fechadas usadas pelo app. Não invente categoria nova sem conversar — elas
 aparecem no resumo por categoria e mudar a lista quebra a comparação com meses anteriores.
 
+A fonte é a tabela `categorias` (tipo, nome, ordem), igual para todas as contas e semeada pela
+migração `98844844bbad_categorias_em_tabela.py`; as listas abaixo são o espelho em prosa.
+Mudar uma lista é uma migração nova. "Outros" está nas duas listas, então são duas linhas, uma
+por tipo: "outros gastos" e "outras entradas".
+
 **Gastos:** Mercado, Alimentação, Transporte, Moradia, Contas, Lazer, Saúde, Educação,
 Assinaturas, Outros
 
@@ -82,6 +88,16 @@ Assinaturas, Outros
 Lançamento com `type == "entrada"` não pode ter `method == "credito"`. Não faz sentido receber
 dinheiro no cartão de crédito neste modelo. A regra é `is_income_on_credit` em
 `domain/service.py`; criação e edição em `api/finance.py` a consultam e respondem 422.
+
+### A categoria é da lista do tipo do lançamento
+
+Um gasto só aceita categoria da lista de gastos; uma entrada, só da lista de entradas — na
+criação, na edição e na importação. A comparação ignora maiúscula, espaço nas pontas e acento
+("saude" vale "Saúde"), e o que fica gravado é sempre o nome da tabela. A API recebe a
+categoria pelo nome; o id (`category_id`) só sai na resposta e é recusado na entrada. Fora da
+lista, a resposta é 422 e nada é gravado; na importação, uma linha recusada derruba o lote
+inteiro. A comparação é `normalize_category` em `domain/service.py`; quem carrega as listas do
+banco e responde 422 é `_category_id` em `api/finance.py`.
 
 ### Em que fatura uma compra cai
 
@@ -268,6 +284,18 @@ conversar antes.
   `TEST_DATABASE_URL` (veja o README), e foi verificada nos dois — mas a execução do dia a dia é
   em sqlite, então uma divergência só de Postgres só aparece se alguém rodar a versão opcional.
   O cálculo de dinheiro não corre esse risco: `test_service.py` não usa banco nenhum.
+- **`categorias.tipo` não tem CHECK.** Só `gasto` e `entrada` fazem sentido, mas o banco aceita
+  qualquer texto; uma linha com outro tipo, inserida à mão, faz `_categories()` em
+  `api/finance.py` estourar (`KeyError`, 500) em toda gravação de lançamento. Hoje só a
+  migração grava nessa tabela. Achado da revisão estrutural das categorias em tabela,
+  01/11/2026.
+- **O padrão "Outros" da importação está fixo na tela.** `ImportScreen` pré-escolhe `'Outros'`
+  em cada linha do extrato; o nome precisa existir na tabela `categorias` para os dois tipos.
+  Uma migração que tire ou renomeie "Outros" faz a confirmação responder 422 até a tela mudar.
+  Mesmo achado, 01/11/2026.
+- **A amostra de categorias dos testes de tela está repetida.** `EntryScreen.test.tsx` e
+  `ImportScreen.test.tsx` declaram o mesmo recorte do `GET /categories`; juntar pede um arquivo
+  de fixture, que não compensa por duas cópias. Mesmo achado, 01/11/2026.
 
 ## O que eu ainda não entendo do que herdei
 

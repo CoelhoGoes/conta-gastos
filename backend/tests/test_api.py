@@ -162,6 +162,98 @@ class TestValidacao:
         assert r.status_code == 422
 
 
+class TestCategoria:
+    """docs/dominio.md: a categoria pertence à lista fechada do tipo do lançamento."""
+
+    def test_grafia_quase_certa_e_gravada_como_na_lista(self, client, auth):  # UC2
+        h = auth()
+        r = client.post("/entries", headers=h, json={**LANCAMENTO, "category": " mercado"})
+        assert r.status_code == 201
+        assert r.json()["category"] == "Mercado"
+        assert client.get("/entries", headers=h).json()[0]["category"] == "Mercado"
+
+    def test_entrada_com_categoria_de_entrada_e_aceita(self, client, auth):  # UC1
+        h = auth()
+        r = client.post("/entries", headers=h, json={**LANCAMENTO, "type": "entrada", "category": "Salário"})
+        assert r.status_code == 201
+
+    @pytest.mark.parametrize("tipo,categoria", [
+        ("gasto", "Viagem"),                    # F1
+        ("gasto", "x:red}body{display:none}"),  # F1
+        ("gasto", "Salário"),                   # F2
+        ("entrada", "Mercado"),                 # F2
+        ("gasto", "   "),                       # F5
+    ])
+    def test_categoria_fora_da_lista_do_tipo_e_recusada(self, client, auth, tipo, categoria):
+        h = auth()
+        r = client.post("/entries", headers=h, json={**LANCAMENTO, "type": tipo, "category": categoria})
+        assert r.status_code == 422
+        assert r.json()["detail"].startswith("Categoria fora da lista de")
+        assert client.get("/entries", headers=h).json() == []
+
+    def test_trocar_tipo_e_categoria_juntos_e_aceito(self, client, auth):  # UC4
+        h = auth()
+        entry = client.post("/entries", headers=h, json=LANCAMENTO).json()
+        r = client.patch(
+            f"/entries/{entry['id']}", headers=h, json={"type": "entrada", "category": "Reembolso"}
+        )
+        assert r.status_code == 200
+        assert r.json()["category"] == "Reembolso"
+        assert r.json()["category_id"] != entry["category_id"]
+
+    def test_trocar_so_o_tipo_e_recusado(self, client, auth):  # F3
+        h = auth()
+        entry = client.post("/entries", headers=h, json=LANCAMENTO).json()
+        r = client.patch(f"/entries/{entry['id']}", headers=h, json={"type": "entrada"})
+        assert r.status_code == 422
+        assert r.json()["detail"] == "Categoria fora da lista de entradas."
+        assert client.get("/entries", headers=h).json()[0]["type"] == "gasto"
+
+    def test_edicao_normaliza_a_grafia(self, client, auth):  # UC2 no PATCH
+        h = auth()
+        entry = client.post("/entries", headers=h, json=LANCAMENTO).json()
+        r = client.patch(f"/entries/{entry['id']}", headers=h, json={"category": "saude"})
+        assert r.json()["category"] == "Saúde"
+
+    def test_outros_vale_nos_dois_tipos_com_ids_diferentes(self, client, auth):  # UC6
+        h = auth()
+        gasto = client.post("/entries", headers=h, json={**LANCAMENTO, "category": "Outros"}).json()
+        entrada = client.post(
+            "/entries", headers=h, json={**LANCAMENTO, "type": "entrada", "category": "Outros"}
+        ).json()
+        assert gasto["category"] == entrada["category"] == "Outros"
+        assert gasto["category_id"] != entrada["category_id"]
+
+    def test_lista_vem_na_ordem_do_seletor(self, client, auth):  # UC8
+        r = client.get("/categories", headers=auth())
+        assert r.status_code == 200
+        nomes = {t: [c["name"] for c in r.json() if c["type"] == t] for t in ("gasto", "entrada")}
+        assert nomes["gasto"][:3] == ["Mercado", "Alimentação", "Transporte"]
+        assert nomes["entrada"] == ["Salário", "Freela", "Reembolso", "Presente", "Venda", "Outros"]
+
+    def test_lista_exige_sessao(self, client):  # F12
+        assert client.get("/categories").status_code == 401
+
+    def test_category_id_na_entrada_e_recusado(self, client, auth):
+        """O id só sai na resposta; reenviá-lo não pode ser ignorado em silêncio."""
+        h = auth()
+        r = client.post("/entries", headers=h, json={**LANCAMENTO, "category_id": 5})
+        assert r.status_code == 422
+        assert "category_id não é aceito" in r.json()["detail"][0]["msg"]
+
+        entry = client.post("/entries", headers=h, json=LANCAMENTO).json()
+        r = client.patch(f"/entries/{entry['id']}", headers=h, json=entry)  # o EntryOut inteiro de volta
+        assert r.status_code == 422
+        assert client.get("/entries", headers=h).json() == [entry]
+
+    def test_lancamento_de_outro_usuario_responde_404_antes_da_categoria(self, client, auth):  # F7
+        ana = auth(email="ana@b.co")
+        bia = auth(email="bia@b.co")
+        entry = client.post("/entries", headers=ana, json=LANCAMENTO).json()
+        r = client.patch(f"/entries/{entry['id']}", headers=bia, json={"category": "Viagem"})
+        assert r.status_code == 404
+
+
 class TestDinheiroComoString:
     def test_valores_trafegam_como_string_e_nao_como_float(self, client, auth):
         h = auth(closing_day=10)
@@ -653,6 +745,34 @@ class TestImportacao:
         assert criado["amount"] == "20.00"
         assert len(client.get("/entries", headers=headers).json()) == 1
 
+    def test_category_id_na_importacao_e_recusado(self, client, auth):
+        headers = auth()
+        linhas = self.enviar(client, headers, account_statement([transaction()])).json()
+        r = client.post("/imports", headers=headers, json=[revisada(linhas[0], category_id=1)])
+        assert r.status_code == 422
+        assert client.get("/entries", headers=headers).json() == []
+
+    def test_lote_com_uma_categoria_fora_da_lista_nao_grava_nada(self, client, auth):  # F6
+        headers = auth()
+        linhas = self.enviar(
+            client,
+            headers,
+            account_statement([
+                transaction(amount="-20.00", memo="FEIRA", fitid="1"),
+                transaction(amount="-30.00", memo="PADARIA", fitid="2", posted="20260906100000[-03:EST]"),
+            ]),
+        ).json()
+
+        r = client.post(
+            "/imports",
+            headers=headers,
+            json=[revisada(linhas[0], category="Mercado"), revisada(linhas[1], category="Viagem")],
+        )
+
+        assert r.status_code == 422
+        assert r.json()["detail"] == "“PADARIA” em 06/09/2026: Categoria fora da lista de gastos."
+        assert client.get("/entries", headers=headers).json() == []
+
     def test_confirmar_duas_vezes_nao_duplica(self, client, auth):
         headers = auth()
         (linha,) = self.enviar(client, headers, account_statement([transaction()])).json()
@@ -748,7 +868,9 @@ class TestEdicao:
         r = client.patch(f"/entries/{entry['id']}", headers=headers, json={"category": "Lazer"})
 
         assert r.status_code == 200
-        assert r.json() == {**entry, "category": "Lazer"}
+        # trocar a categoria troca o id junto; o resto fica como estava
+        assert r.json() == {**entry, "category": "Lazer", "category_id": r.json()["category_id"]}
+        assert r.json()["category_id"] != entry["category_id"]
 
     def test_corpo_vazio_nao_muda_nada(self, client, auth):
         headers = auth()

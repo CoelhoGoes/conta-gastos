@@ -10,13 +10,18 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
 
 - **`infra/database.py`** — SQLAlchemy engine/session (`DATABASE_URL` env var, defaults to local
   Postgres). `get_session()` is the FastAPI dependency that yields a session per request.
-- **`infra/models.py`** — four tables: `User` (email, bcrypt hash, `closing_day`), `Entry`
-  (`type` gasto/entrada, `amount`, `method` avista/credito, `installments`), `Income` (the
+- **`infra/models.py`** — five tables: `User` (email, bcrypt hash, `closing_day`), `Entry`
+  (`type` gasto/entrada, `amount`, `method` avista/credito, `installments`, `category_id`),
+  `Category` (`categorias`: `type`, `name`, `order`, unique on type+name — the closed lists,
+  global, seeded by a migration), `Income` (the
   fixed-income history: `start`, and `end` or null for open-ended; incomes may overlap and
   sum, `ck_renda_periodo` keeps `end >= start`) and `IncomePart` (`partes_renda`: 1 to 4 per
   income, each with `amount`, `rule` — `dia_fixo`/`dia_util`/`ultimo_dia_util`, or null for an
   income from before the payday existed — `day` and `next_month`; cascade-deleted with the
-  income, loaded with it by `selectin`). Attribute names are English but map explicitly onto
+  income, loaded with it by `selectin`). `Entry.category` is a read-only property returning
+  the name of `category_ref` (loaded `joined`), so the domain and the response schemas keep
+  reading a name; writes go through `category_id` — `Entry(category=...)` or
+  `setattr(entry, "category", ...)` fails. Attribute names are English but map explicitly onto
   the existing Portuguese DB columns (e.g. `usuarios`, `lancamentos`, `rendas`, `valor` — see **Language
   conventions**). Money columns are always
   `Numeric(12,2)`, never float. `Entry.import_id` (`id_importacao`) holds the origin of an imported
@@ -52,7 +57,9 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   dataclasses, not Pydantic), so they're unit-testable without a running Postgres.
   `invoice_for_purchase`, `split_installments`, `build_invoices` / `calculate_invoice`,
   `payment_date` / `income_payments` / `next_payment`, `calculate_summaries` /
-  `calculate_summary`, `calculate_category_breakdown`.
+  `calculate_summary`, `calculate_category_breakdown`, `normalize_category` (matches a name
+  against the names of its type, ignoring case, surrounding spaces and accents; the caller
+  passes the names, read from the database).
   `calculate_summaries` is where the accumulated balance lives: one running sum from the
   oldest entry or income up to the latest month asked, so `/trend` computes the series once;
   `calculate_summary` is the one-month call of it. `payment_date` is the credit date of a
@@ -85,18 +92,26 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   on Postgres (skipped on sqlite) — see the `alembic/` item. Each test builds its own engine, and `conftest.py`
   disposes of it after the `TestClient`: left open, the pools ran the Postgres suite out of
   connections ("too many clients already") — a new fixture that creates an engine does the
-  same. Install with
+  same. `conftest.py` also seeds the `categorias` table after `create_all`, importing the
+  `CATEGORIES` constant from the migration that created it — sqlite runs no migrations, so
+  the table would be empty and every entry write a 422. A migration that changes the lists
+  must update that import. Install with
   `pip install -r requirements-dev.txt` — dev dependencies live there and never reach the
   image.
 - **`api/auth.py` / `api/finance.py`** — mounted at `/auth` and root respectively.
   `finance.py` loads *all* of a user's `Entry` rows into memory (`_all`) and then
   filters/aggregates in Python via `service.py`, rather than doing month filtering in SQL for
   `/summary` and `/trend` — only `/entries` filters by month at the query level. Fine at
-  single-user scale; the first thing to revisit if it gets slow. Two helpers hold invariants
+  single-user scale; the first thing to revisit if it gets slow. Three helpers hold invariants
   that every new endpoint must reuse rather than repeat: `_owned_entry` (an `Entry` that
   belongs to the JWT user, 404 otherwise — used by `PATCH` and `DELETE`) and
   `_reject_income_on_credit` (used by create and by `PATCH`, which validates the merged
-  entry, not just the fields sent). `_owned_income` is the income twin of `_owned_entry`, and
+  entry, not just the fields sent). `_categories` + `_category_id` are the third: they turn the
+  category name sent by the client into the id of the category of the entry's type, or answer
+  422 — create, `PATCH` (on the merged entry) and every import line before any is written.
+  `GET /categories` returns the lists. The client never sends `category_id`: the input schemas
+  refuse it with 422 (`_reject_category_id` in `schemas.py`, skipped for `EntryOut`, which
+  inherits from `EntryCreate` and does carry it). `_owned_income` is the income twin of `_owned_entry`, and
   `_reject_duplicate_income` answers 409 for an income equal to another (period and parts)
   unless `allow_duplicate=true`. Every month in a path or query goes through the `MONTH`
   pattern, and every date (`today`, an income's `start`/`end`) is held to the same years:

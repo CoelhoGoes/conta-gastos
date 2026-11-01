@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/state/auth-context'
-import type { ImportPreviewItem } from '@/shared/types'
+import type { Category, ImportPreviewItem } from '@/shared/types'
 import { ImportScreen } from './ImportScreen'
 
 vi.mock('@/data/api', () => ({
@@ -12,11 +12,18 @@ vi.mock('@/data/api', () => ({
     me: vi.fn(),
     previewImport: vi.fn(),
     confirmImport: vi.fn(),
+    categoryList: vi.fn(),
     logout: vi.fn(),
   },
 }))
 
 const { api } = await import('@/data/api')
+
+// O que `GET /categories` devolve, em recorte: a lista de verdade vive na tabela `categorias`
+const CATEGORIAS: Category[] = [
+  ...['Mercado', 'Alimentação', 'Lazer', 'Outros'].map((name, i) => ({ id: i + 1, type: 'gasto' as const, name })),
+  ...['Salário', 'Freela', 'Reembolso', 'Outros'].map((name, i) => ({ id: i + 11, type: 'entrada' as const, name })),
+]
 
 const linha = (over: Partial<ImportPreviewItem> = {}): ImportPreviewItem => ({
   type: 'gasto',
@@ -52,6 +59,7 @@ describe('ImportScreen', () => {
     })
     vi.mocked(api.previewImport).mockReset()
     vi.mocked(api.confirmImport).mockReset()
+    vi.mocked(api.categoryList).mockResolvedValue(CATEGORIAS)
   })
 
   it('não envia nada antes de o usuário confirmar', async () => {
@@ -154,7 +162,7 @@ describe('ImportScreen', () => {
     const user = userEvent.setup()
     vi.mocked(api.previewImport).mockResolvedValue([linha()])
     vi.mocked(api.confirmImport).mockResolvedValue({
-      created: [{ id: 1, ...linha(), category: 'Outros', method: 'avista', installments: 1 }],
+      created: [{ id: 1, ...linha(), category: 'Outros', category_id: 4, method: 'avista', installments: 1 }],
       skipped: 2,
     })
     montar()

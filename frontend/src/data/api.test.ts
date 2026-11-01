@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { errorMessage } from './api'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { api, errorMessage } from './api'
 
 // Os erros abaixo são os que o FastAPI devolve de verdade num 422 (tipo, loc e ctx copiados
 // de uma resposta real); o `msg` em inglês é o que a tela não deve mostrar.
@@ -70,5 +70,45 @@ describe('errorMessage', () => {
       .toBe('Partes: inclua pelo menos um item.')
     expect(errorMessage([{ type: 'too_long', loc: ['body', 'parts'], ctx: { max_length: 4 } }]))
       .toBe('Partes: itens demais.')
+  })
+})
+
+describe('categoryList', () => {
+  const lista = [{ id: 1, type: 'gasto', name: 'Mercado' }]
+  const resposta = (status: number, body: unknown) => new Response(JSON.stringify(body), { status })
+
+  afterEach(() => {
+    api.logout()
+    vi.unstubAllGlobals()
+  })
+
+  it('busca uma vez por sessão, mesmo com vários seletores pedindo', async () => {  // UC8
+    const fetch = vi.fn(async () => resposta(200, lista))
+    vi.stubGlobal('fetch', fetch)
+
+    expect(await Promise.all([api.categoryList(), api.categoryList()])).toEqual([lista, lista])
+    expect(await api.categoryList()).toEqual(lista)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('falha não fica guardada: a próxima chamada tenta de novo', async () => {  // F10
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(resposta(500, {}))
+      .mockResolvedValueOnce(resposta(200, lista))
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(api.categoryList()).rejects.toThrow()
+    expect(await api.categoryList()).toEqual(lista)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('o logout descarta a lista', async () => {
+    const fetch = vi.fn(async () => resposta(200, lista))
+    vi.stubGlobal('fetch', fetch)
+
+    await api.categoryList()
+    api.logout()
+    await api.categoryList()
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 })

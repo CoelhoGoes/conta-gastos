@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/state/auth-context'
 import { currentMonth, shiftMonth } from '@/shared/format'
-import type { EntryOut } from '@/shared/types'
+import type { Category, EntryOut } from '@/shared/types'
 import { EntryScreen } from './EntryScreen'
 
 vi.mock('@/data/api', () => ({
@@ -16,10 +16,17 @@ vi.mock('@/data/api', () => ({
     createEntry: vi.fn(),
     updateEntry: vi.fn(),
     removeEntry: vi.fn(),
+    categoryList: vi.fn(),
     logout: vi.fn(),
   },
 }))
 const { api } = await import('@/data/api')
+
+// O que `GET /categories` devolve, em recorte: a lista de verdade vive na tabela `categorias`
+const CATEGORIAS: Category[] = [
+  ...['Mercado', 'Alimentação', 'Lazer', 'Outros'].map((name, i) => ({ id: i + 1, type: 'gasto' as const, name })),
+  ...['Salário', 'Freela', 'Reembolso', 'Outros'].map((name, i) => ({ id: i + 11, type: 'entrada' as const, name })),
+]
 
 const RESUMO = {
   month: '2026-09', monthly_income: '5000.00', extra_income: '0', cash_expenses: '0',
@@ -28,7 +35,7 @@ const RESUMO = {
 }
 const LANCAMENTO: EntryOut = {
   id: 1, description: 'feira', amount: '150.50', type: 'gasto',
-  category: 'Mercado', method: 'avista', date: '2026-09-05', installments: 1,
+  category: 'Mercado', category_id: 1, method: 'avista', date: '2026-09-05', installments: 1,
 }
 
 function montar() {
@@ -54,6 +61,7 @@ describe('EntryScreen', () => {
     vi.mocked(api.updateEntry).mockReset()
     vi.mocked(api.updateEntry).mockResolvedValue(LANCAMENTO)
     vi.mocked(api.removeEntry).mockResolvedValue(null)
+    vi.mocked(api.categoryList).mockResolvedValue(CATEGORIAS)
   })
 
   describe('o payload enviado', () => {
@@ -144,7 +152,7 @@ describe('EntryScreen', () => {
       expect(screen.getByRole('group', { name: 'Forma' })).toBeInTheDocument()
     })
 
-    it('troca a lista de categorias junto com o tipo', async () => {
+    it('troca a lista de categorias junto com o tipo', async () => {  // UC8: a lista vem da API
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
@@ -255,6 +263,19 @@ describe('EntryScreen', () => {
       expect(payload).toMatchObject({ description: 'feira', category: 'Lazer', amount: '150.50' })
     })
 
+    it('a categoria do lançamento aparece escolhida quando a lista chega depois', async () => {
+      // UC8: a lista vem da API; abrir a edição antes dela chegar não pode perder a categoria
+      let entregar: (lista: Category[]) => void = () => {}
+      vi.mocked(api.categoryList).mockReturnValue(new Promise((r) => (entregar = r)))
+      const user = userEvent.setup()
+      montar()
+
+      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
+      entregar(CATEGORIAS)
+
+      await waitFor(() => expect(screen.getByLabelText('Categoria')).toHaveValue('Mercado'))
+    })
+
     it('depois de salvar volta a ser o formulário de lançamento novo', async () => {
       const user = userEvent.setup()
       montar()
@@ -305,6 +326,20 @@ describe('EntryScreen', () => {
 
       expect(await screen.findByText('Novo lançamento')).toBeInTheDocument()
       expect(screen.getByLabelText('Descrição')).toHaveValue('')
+    })
+  })
+
+  describe('a lista de categorias', () => {
+    it('sem a lista, mostra o erro e não deixa salvar', async () => {  // F10
+      vi.mocked(api.categoryList).mockRejectedValue(new Error('rede'))
+      const user = userEvent.setup()
+      montar()
+
+      expect(await screen.findByText('Não foi possível carregar as categorias.')).toBeInTheDocument()
+      await user.type(screen.getByLabelText('Descrição'), 'pão')
+      await user.type(screen.getByLabelText('Valor'), '12.50')
+      await user.click(screen.getByRole('button', { name: 'Salvar' }))
+      expect(api.createEntry).not.toHaveBeenCalled()
     })
   })
 

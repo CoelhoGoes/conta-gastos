@@ -33,6 +33,14 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+def _reject_category_id(cls, data):
+    """`category_id` só existe na resposta. Na entrada a categoria vai pelo nome: recusa em vez
+    de ignorar, para quem reenvia o `EntryOut` saber que o id não é lido."""
+    if isinstance(data, dict) and "category_id" in data and "category_id" not in cls.model_fields:
+        raise ValueError("Envie a categoria pelo nome, em category; category_id não é aceito.")
+    return data
+
+
 class EntryBase(BaseModel):
     """O que todo lançamento tem, digitado ou importado."""
 
@@ -42,6 +50,8 @@ class EntryBase(BaseModel):
     description: str = Field(min_length=1, max_length=200)
     category: str = Field(min_length=1, max_length=50)
     date: date
+
+    _no_category_id = model_validator(mode="before")(classmethod(_reject_category_id))
 
 
 class EntryCreate(EntryBase):
@@ -69,10 +79,22 @@ class EntryUpdate(BaseModel):
     method: Literal["avista", "credito"] | None = None
     installments: int | None = None
 
+    _no_category_id = model_validator(mode="before")(classmethod(_reject_category_id))
+
 
 class EntryOut(EntryCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    category_id: int
+
+
+class CategoryOut(BaseModel):
+    """Uma categoria da lista fechada. `GET /categories` devolve as listas na ordem do seletor."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    type: Literal["gasto", "entrada"]
+    name: str
 
 
 class InvoiceInstallment(BaseModel):

@@ -27,6 +27,10 @@ e o versionamento tenta seguir [SemVer](https://semver.org/lang/pt-BR/).
 - No resumo, a renda do mês mostra em que dia cai cada pagamento
 
 ### Alterado
+- A categoria de um lançamento passa a ser conferida também pelo servidor: só entram as
+  categorias da lista do tipo (gasto ou entrada), venha o lançamento da tela, da importação
+  de extrato ou de outro cliente. Uma grafia aproximada, como "saude", é gravada como
+  "Saúde". As listas passam a vir do servidor, iguais para todos os aparelhos
 - Apagar uma renda agora pede um segundo clique para confirmar, como já acontecia com os
   lançamentos. Os botões de editar e excluir das duas listas ficaram iguais, e o de excluir
   diz ao leitor de tela qual item ele apaga

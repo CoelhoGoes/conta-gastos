@@ -150,9 +150,9 @@ cd frontend && npx -y knip                    # código e dependências sem uso 
 
 ```bash
 pip install -r backend/requirements-dev.txt   # uma vez
-cd backend && pytest                          # 221 testes (3 pulados em sqlite), ~30s
+cd backend && pytest                          # 251 testes (5 pulados em sqlite), ~35s
 
-cd frontend && npm test                       # 146 testes, ~6s
+cd frontend && npm test                       # 151 testes, ~6s
 ```
 
 Os testes de `backend/tests/test_service.py` e `test_ofx.py` não precisam de banco —
@@ -185,7 +185,7 @@ backend/
     ├── main.py            entrada, CORS, registro dos routers, /health
     ├── api/               HTTP: rotas, contratos e dependências do FastAPI
     │   ├── auth.py        /auth/*
-    │   ├── finance.py     /entries, /summary, /invoices, /trend, /imports
+    │   ├── finance.py     /entries, /categories, /summary, /invoices, /trend, /imports
     │   ├── schemas.py     contratos de entrada/saída (Pydantic)
     │   └── deps.py        current_user e limite de tentativas de login
     ├── domain/            regras de negócio, funções puras, sem banco nem HTTP
@@ -193,7 +193,7 @@ backend/
     │   └── ofx.py         leitura de extrato OFX
     └── infra/             o que fala com o mundo de fora
         ├── database.py    engine e sessão do SQLAlchemy
-        ├── models.py      tabelas usuarios, lancamentos, rendas e partes_renda
+        ├── models.py      tabelas usuarios, lancamentos, categorias, rendas e partes_renda
         └── security.py    hash bcrypt e JWT
 
 frontend/
@@ -217,7 +217,7 @@ frontend/
     │       ├── ErrorText.tsx      linha de erro em vermelho
     │       ├── StatusText.tsx     linha cinza: carregando, lista vazia, dica de campo
     │       ├── ChoiceToggle.tsx   escolha única entre poucas opções, nunca fica vazia
-    │       ├── CategorySelect.tsx seletor de categoria do gasto ou da entrada
+    │       ├── CategorySelect.tsx seletor de categoria do gasto ou da entrada (lista do GET /categories)
     │       ├── MoneyRow.tsx       valor "R$ x" de uma linha de resumo
     │       ├── CategoryTotal.tsx  "R$ x · y% do gasto do mês"
     │       ├── RowActions.tsx     editar e excluir (com confirmação) numa linha de lista
@@ -232,7 +232,6 @@ frontend/
     └── shared/        usado por qualquer camada, não depende de nenhuma
         ├── api-schema.d.ts gerado do OpenAPI da API — não edite à mão
         ├── types.ts        nomes curtos para os tipos gerados
-        ├── categories.ts   listas fechadas de categoria, espelha docs/dominio.md
         └── format.ts       currentMonth() / formatCurrency() / formatPercent()
                             / formatCurrencyInteger() / shiftMonth()
                             / formatMonthShort() / formatDayMonth()
@@ -270,7 +269,8 @@ Todos exigem `Authorization: Bearer <token>`, exceto `/auth/register`, `/auth/to
 | GET | `/auth/me` | dados do usuário |
 | PUT | `/auth/me` | atualiza o dia de fechamento |
 | DELETE | `/auth/me` | exclui a conta (pede `password` no corpo); exclusão lógica, os dados ficam no banco |
-| POST | `/entries` | cria lançamento |
+| GET | `/categories` | listas fechadas de categoria (`[{id, type, name}]`), na ordem do seletor |
+| POST | `/entries` | cria lançamento; a categoria vai pelo nome e precisa estar na lista do tipo (422 se não estiver, ou se vier `category_id`) |
 | GET | `/entries` | lista lançamentos (filtro opcional `?month=2026-09`) |
 | PATCH | `/entries/{id}` | altera só os campos enviados; o resultado é validado como lançamento novo |
 | DELETE | `/entries/{id}` | remove lançamento |

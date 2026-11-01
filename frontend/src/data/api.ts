@@ -1,5 +1,6 @@
 // Cliente da API. Troque a URL pelo endereço do backend em produção.
 import type {
+  Category,
   CategoryBreakdown,
   EntryCreate,
   EntryImport,
@@ -120,6 +121,10 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (null as T) : response.json();
 }
 
+// A lista de categorias é igual para todas as contas e só muda com uma migração: uma busca por
+// sessão basta, mesmo com um seletor por linha na importação. Falha não fica guardada.
+let categoryCache: Promise<Category[]> | null = null
+
 export const api = {
   async login(email: string, password: string): Promise<void> {
     const body = new URLSearchParams({ username: email, password });
@@ -140,7 +145,10 @@ export const api = {
   register: (email: string, password: string) =>
     req<User>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-  logout: () => localStorage.removeItem(TOKEN_KEY),
+  logout: () => {
+    localStorage.removeItem(TOKEN_KEY)
+    categoryCache = null
+  },
   isAuthenticated: () => Boolean(token()),
 
   me: () => req<User>('/auth/me'),
@@ -170,6 +178,14 @@ export const api = {
     return req<ImportPreviewItem[]>('/imports/preview', { method: 'POST', body });
   },
   confirmImport: (lines: EntryImport[]) => req<ImportResult>('/imports', { method: 'POST', body: JSON.stringify(lines) }),
+
+  categoryList: () => {
+    categoryCache ??= req<Category[]>('/categories').catch((e) => {
+      categoryCache = null
+      throw e
+    })
+    return categoryCache
+  },
 
   summary: (month: string) => req<Summary>(`/summary/${month}`),
   categoryBreakdown: (month: string) => req<CategoryBreakdown[]>(`/summary/${month}/categories`),

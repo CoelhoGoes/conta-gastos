@@ -73,8 +73,10 @@ business logic on the client.
 
 ### Categories
 
-The `gasto` and `entrada` category lists live in `docs/dominio.md` — read them from there
-rather than inventing category names.
+The `gasto` and `entrada` category lists live in the `categorias` table, seeded by the
+migration `98844844bbad_categorias_em_tabela.py` (its `CATEGORIES` constant is the only copy in
+code; `tests/conftest.py` imports it to seed sqlite). `docs/dominio.md` lists them in prose.
+Changing a list is a new migration, never an edit — and don't invent category names.
 
 ## Language conventions
 
@@ -141,7 +143,7 @@ frontend/
     │       ├── ErrorText.tsx      red error line under a form or list
     │       ├── StatusText.tsx     muted line: loading, empty list, a field's hint
     │       ├── ChoiceToggle.tsx   single-choice ToggleGroup that never ends up empty
-    │       ├── CategorySelect.tsx closed category list for a gasto or an entrada
+    │       ├── CategorySelect.tsx category list of a gasto or an entrada, from GET /categories
     │       ├── MoneyRow.tsx       "R$ x" value of a <dl> row, optional +/- sign
     │       ├── CategoryTotal.tsx  "R$ x · y% do gasto do mês"
     │       ├── RowActions.tsx     edit + delete (second click confirms) of a list row
@@ -156,7 +158,6 @@ frontend/
     └── shared/
         ├── api-schema.d.ts    generated from the API's OpenAPI — never edit by hand
         ├── types.ts           short names for the generated types
-        ├── categories.ts      closed category lists, mirrors docs/dominio.md
         └── format.ts          currentMonth() / formatCurrency() / formatPercent()
                                / formatCurrencyInteger() / shiftMonth()
                                / formatMonthShort() / formatDayMonth()
@@ -207,9 +208,9 @@ npm run gen:types  # regenerate src/shared/api-schema.d.ts from the running API
 
 ```bash
 pip install -r backend/requirements-dev.txt   # once
-cd backend && pytest                          # 221 tests (3 skipped on sqlite), ~30s
+cd backend && pytest                          # 251 tests (5 skipped on sqlite), ~35s
 
-cd frontend && npm test                       # 146 tests, ~6s
+cd frontend && npm test                       # 151 tests, ~6s
 ```
 
 `backend/tests/test_service.py` needs no database: `service.py` is pure, so the tests use plain

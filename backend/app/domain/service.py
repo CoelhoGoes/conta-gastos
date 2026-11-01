@@ -6,7 +6,9 @@ compute exactly the same thing.
 from __future__ import annotations
 
 import calendar
+import unicodedata
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -109,6 +111,18 @@ def shift_month(key: str, n: int) -> str:
 def is_income_on_credit(entry_type: str, method: str | None) -> bool:
     """An entrada never goes on the credit card — receiving money on it makes no sense here."""
     return entry_type == "entrada" and method == "credito"
+
+
+def _fold(text: str) -> str:
+    """Ignores case, accents and surrounding spaces: "  saude" and "Saúde" compare equal."""
+    decomposed = unicodedata.normalize("NFD", text.strip().casefold())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def normalize_category(category: str, allowed: Iterable[str]) -> str | None:
+    """The category as spelled in `allowed` (the names of its type, read from the database by
+    the caller), or None when it is not one of them."""
+    return next((c for c in allowed if _fold(c) == _fold(category)), None)
 
 
 def invoice_for_purchase(d: date, closing_day: int) -> str:

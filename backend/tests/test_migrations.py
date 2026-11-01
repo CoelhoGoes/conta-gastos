@@ -146,3 +146,76 @@ def test_rendas_antigas_ganham_fim_e_viram_uma_parte_sem_dia(monkeypatch):
         assert sobra == 4  # a renda 0 de agosto saiu
     finally:
         _empty_database()
+
+
+def _ate_antes_das_categorias(monkeypatch):
+    """Banco vazio migrado até a revisão anterior à tabela de categorias, com um usuário."""
+    from alembic.config import Config
+
+    from alembic import command
+
+    monkeypatch.setenv("DATABASE_URL", URL)
+    for mod in [m for m in sys.modules if m == "app" or m.startswith("app.")]:
+        del sys.modules[mod]
+
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND / "alembic"))
+    _empty_database()
+    command.upgrade(config, "6f1a02b20a81")  # a última antes da tabela de categorias
+    engine = create_engine(URL)
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO usuarios (id, email, senha_hash, dia_fechamento)
+            VALUES (1, 'a@b.co', 'x', 10)
+        """))
+    return config, command, engine
+
+
+def test_lancamentos_existentes_ganham_o_id_da_categoria(monkeypatch):
+    """UC9: cada lançamento passa a apontar para a categoria de mesmo tipo e nome — "Outros"
+    de gasto e de entrada são linhas diferentes. O downgrade devolve o texto."""
+    config, command, engine = _ate_antes_das_categorias(monkeypatch)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO lancamentos (usuario_id, tipo, valor, descricao, categoria, data, forma, parcelas)
+                VALUES (1, 'gasto', 10, 'a', 'Mercado', '2026-09-03', 'avista', 1),
+                       (1, 'gasto', 10, 'b', 'Outros', '2026-09-03', 'avista', 1),
+                       (1, 'entrada', 10, 'c', 'Outros', '2026-09-03', 'avista', 1)
+            """))
+        command.upgrade(config, "head")
+        with engine.begin() as conn:
+            ligados = conn.execute(text("""
+                SELECT l.descricao, c.tipo, c.nome FROM lancamentos l
+                JOIN categorias c ON c.id = l.categoria_id ORDER BY l.descricao
+            """)).all()
+        assert ligados == [("a", "gasto", "Mercado"), ("b", "gasto", "Outros"), ("c", "entrada", "Outros")]
+
+        command.downgrade(config, "6f1a02b20a81")
+        with engine.begin() as conn:
+            textos = conn.execute(text("SELECT categoria FROM lancamentos ORDER BY descricao")).scalars().all()
+        assert textos == ["Mercado", "Outros", "Outros"]
+    finally:
+        engine.dispose()
+        _empty_database()
+
+
+def test_lancamento_sem_categoria_correspondente_impede_a_migracao(monkeypatch):
+    """F11: nada é reescrito em silêncio — a migração para e diz qual par não casou."""
+    config, command, engine = _ate_antes_das_categorias(monkeypatch)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO lancamentos (usuario_id, tipo, valor, descricao, categoria, data, forma, parcelas)
+                VALUES (1, 'gasto', 10, 'a', 'Viagem', '2026-09-03', 'avista', 1),
+                       (1, 'entrada', 10, 'b', 'Mercado', '2026-09-03', 'avista', 1)
+            """))
+        with pytest.raises(RuntimeError, match="entrada/Mercado, gasto/Viagem"):
+            command.upgrade(config, "head")
+        with engine.begin() as conn:
+            assert conn.execute(text("SELECT categoria FROM lancamentos ORDER BY descricao")).scalars().all() == [
+                "Viagem", "Mercado"
+            ]
+    finally:
+        engine.dispose()
+        _empty_database()

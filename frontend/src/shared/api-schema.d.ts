@@ -75,6 +75,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Categories
+         * @description As listas fechadas, na ordem do seletor. Iguais para todas as contas.
+         */
+        get: operations["list_categories_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/entries/{entry_id}": {
         parameters: {
             query?: never;
@@ -321,6 +341,21 @@ export interface components {
             /** Total Installments */
             total_installments?: number | null;
         };
+        /**
+         * CategoryOut
+         * @description Uma categoria da lista fechada. `GET /categories` devolve as listas na ordem do seletor.
+         */
+        CategoryOut: {
+            /** Id */
+            id: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "gasto" | "entrada";
+            /** Name */
+            name: string;
+        };
         /** EntryCreate */
         EntryCreate: {
             /**
@@ -409,6 +444,8 @@ export interface components {
             installments?: number;
             /** Id */
             id: number;
+            /** Category Id */
+            category_id: number;
         };
         /**
          * EntryUpdate
@@ -900,6 +937,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryOut"][];
                 };
             };
         };

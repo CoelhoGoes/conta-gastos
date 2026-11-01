@@ -14,6 +14,7 @@ from app.domain.service import (
     invoice_for_purchase,
     is_income_on_credit,
     next_payment,
+    normalize_category,
     payment_date,
     shift_month,
     split_installments,
@@ -52,6 +53,41 @@ class TestIsIncomeOnCredit:
     ])
     def test_so_entrada_no_credito_e_proibida(self, tipo, metodo, esperado):
         assert is_income_on_credit(tipo, metodo) is esperado
+
+
+# Um recorte das listas da tabela `categorias`; a regra não depende de quais são
+GASTOS = ("Mercado", "Alimentação", "Saúde", "Outros")
+ENTRADAS = ("Salário", "Reembolso", "Outros")
+
+
+class TestNormalizeCategory:
+    """docs/dominio.md: a categoria pertence à lista fechada do tipo do lançamento."""
+
+    @pytest.mark.parametrize("permitidas,categoria,esperado", [
+        (GASTOS, "Mercado", "Mercado"),             # UC1
+        (ENTRADAS, "Salário", "Salário"),           # UC1
+        (GASTOS, "mercado", "Mercado"),             # UC2: caixa
+        (GASTOS, "  Mercado ", "Mercado"),          # UC2: espaço nas pontas
+        (GASTOS, "saude", "Saúde"),                 # UC2: acento
+        (GASTOS, "ALIMENTACAO", "Alimentação"),     # UC2: caixa e acento juntos
+        (ENTRADAS, "salario", "Salário"),
+        (GASTOS, "Outros", "Outros"),               # UC6
+        (ENTRADAS, "Outros", "Outros"),             # UC6
+    ])
+    def test_categoria_da_lista_volta_na_grafia_da_lista(self, permitidas, categoria, esperado):
+        assert normalize_category(categoria, permitidas) == esperado
+
+    @pytest.mark.parametrize("permitidas,categoria", [
+        (GASTOS, "Viagem"),                         # F1
+        (GASTOS, "x:red}body{display:none}"),       # F1: o achado da revisão de segurança
+        (GASTOS, "Mercad"),                         # F1: parecido não basta
+        (GASTOS, "Salário"),                        # F2: da lista do outro tipo
+        (ENTRADAS, "Mercado"),                      # F2
+        (GASTOS, ""),                               # F5
+        (GASTOS, "   "),                            # F5
+    ])
+    def test_categoria_fora_da_lista_e_recusada(self, permitidas, categoria):
+        assert normalize_category(categoria, permitidas) is None
 
 
 class TestInvoiceForPurchase:

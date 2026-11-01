@@ -100,6 +100,19 @@ class IncomePart(Base):
     income: Mapped["Income"] = relationship(back_populates="parts")
 
 
+class Category(Base):
+    """As listas fechadas de categorias, iguais para todas as contas. Nascem na migração que
+    criou a tabela; mudar a lista é uma migração nova."""
+
+    __tablename__ = "categorias"
+    __table_args__ = (UniqueConstraint("tipo", "nome", name="uq_categoria_tipo_nome"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    type: Mapped[str] = mapped_column("tipo", String(10))  # gasto | entrada
+    name: Mapped[str] = mapped_column("nome", String(50))
+    order: Mapped[int] = mapped_column("ordem", Integer)  # posição no seletor, dentro do tipo
+
+
 class Entry(Base):
     __tablename__ = "lancamentos"
     # reimportar o mesmo extrato não pode duplicar; nulos não conflitam no Postgres
@@ -113,7 +126,9 @@ class Entry(Base):
     type: Mapped[str] = mapped_column("tipo", String(10))          # gasto | entrada
     amount: Mapped[float] = mapped_column("valor", Numeric(12, 2))
     description: Mapped[str] = mapped_column("descricao", String(200))
-    category: Mapped[str] = mapped_column("categoria", String(50))
+    category_id: Mapped[int] = mapped_column(
+        "categoria_id", ForeignKey("categorias.id", ondelete="RESTRICT"), index=True
+    )
     date: Mapped[date] = mapped_column("data", Date, index=True)
     method: Mapped[str] = mapped_column("forma", String(10), default="avista")  # avista | credito
     installments: Mapped[int] = mapped_column("parcelas", Integer, default=1)
@@ -127,3 +142,10 @@ class Entry(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="entries")
+    # carregada junto: resumo, fatura e lista leem o nome de cada lançamento
+    category_ref: Mapped[Category] = relationship(lazy="joined")
+
+    @property
+    def category(self) -> str:
+        """O nome da categoria — é o que o domínio e as respostas da API leem."""
+        return self.category_ref.name
