@@ -172,7 +172,7 @@ export const api = {
   confirmImport: (lines: EntryImport[]) => req<ImportResult>('/imports', { method: 'POST', body: JSON.stringify(lines) }),
 
   summary: (month: string) => req<Summary>(`/summary/${month}`),
-  categories: (month: string) => req<CategoryBreakdown[]>(`/summary/${month}/categories`),
+  categoryBreakdown: (month: string) => req<CategoryBreakdown[]>(`/summary/${month}/categories`),
   invoice: (month: string) => req<Invoice>(`/invoices/${month}`),
   trend: (months = 6, until?: string) => req<Summary[]>(`/trend?months=${months}${until ? `&until=${until}` : ''}`),
 };

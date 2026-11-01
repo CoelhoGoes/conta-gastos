@@ -81,7 +81,7 @@ export function SummaryScreen() {
   useEffect(() => {
     let ativo = true
     setError(null)
-    Promise.all([api.summary(month), api.categories(month)])
+    Promise.all([api.summary(month), api.categoryBreakdown(month)])
       .then(([s, c]: [Summary, CategoryBreakdown[]]) => {
         // dois cliques rápidos podem devolver fora de ordem: ignora o que já não é o mês atual
         if (!ativo) return

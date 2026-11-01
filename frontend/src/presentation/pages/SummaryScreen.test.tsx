@@ -12,7 +12,7 @@ vi.mock('@/data/api', () => ({
     isAuthenticated: () => true,
     me: vi.fn(),
     summary: vi.fn(),
-    categories: vi.fn(),
+    categoryBreakdown: vi.fn(),
     trend: vi.fn(),
     logout: vi.fn(),
   },
@@ -56,7 +56,7 @@ const vemAntes = (a: Node, b: Node) =>
 describe('SummaryScreen', () => {
   beforeEach(() => {
     vi.mocked(api.me).mockResolvedValue({ id: 1, email: 'a@b.co', closing_day: 10 })
-    vi.mocked(api.categories).mockResolvedValue([])
+    vi.mocked(api.categoryBreakdown).mockResolvedValue([])
     vi.mocked(api.trend).mockResolvedValue([])
   })
 
@@ -146,7 +146,7 @@ describe('SummaryScreen', () => {
     vi.mocked(api.summary).mockResolvedValue(resumo('6500.00'))
     montar()
     await waitFor(() => expect(api.summary).toHaveBeenCalledWith(currentMonth()))
-    expect(api.categories).toHaveBeenCalledWith(currentMonth())
+    expect(api.categoryBreakdown).toHaveBeenCalledWith(currentMonth())
   })
 
   it('refaz resumo e categorias ao navegar para outro mês', async () => {
@@ -158,12 +158,12 @@ describe('SummaryScreen', () => {
     const anterior = shiftMonth(currentMonth(), -1)
     await user.click(screen.getByRole('button', { name: 'Mês anterior' }))
     await waitFor(() => expect(api.summary).toHaveBeenCalledWith(anterior))
-    expect(api.categories).toHaveBeenCalledWith(anterior)
+    expect(api.categoryBreakdown).toHaveBeenCalledWith(anterior)
   })
 
   it('a legenda mostra só nome e percentual da categoria, sem os itens', async () => {
     vi.mocked(api.summary).mockResolvedValue(resumo('6500.00'))
-    vi.mocked(api.categories).mockResolvedValue([LAZER])
+    vi.mocked(api.categoryBreakdown).mockResolvedValue([LAZER])
     montar()
     const legenda = await screen.findByRole('button', { name: /Lazer/ })
     expect(legenda).toHaveTextContent('100,0%')
@@ -179,7 +179,7 @@ describe('SummaryScreen', () => {
       items: [{ description: `item de ${category}`, amount: total, installment: null, total_installments: null }],
     })
     vi.mocked(api.summary).mockResolvedValue(resumo('6500.00'))
-    vi.mocked(api.categories).mockResolvedValue([
+    vi.mocked(api.categoryBreakdown).mockResolvedValue([
       categoria('Moradia', '700.00', '0.35'),
       categoria('Mercado', '500.00', '0.25'),
       categoria('Transporte', '300.00', '0.15'),
@@ -214,7 +214,7 @@ describe('SummaryScreen', () => {
     })
     vi.mocked(api.summary).mockResolvedValue({ ...resumo('6500.00'), total_spent: '1150.00' })
     // a API devolve da maior para a menor (service.py); a tela mantém essa ordem
-    vi.mocked(api.categories).mockResolvedValue([
+    vi.mocked(api.categoryBreakdown).mockResolvedValue([
       categoria('Moradia', '700.00'),
       categoria('Mercado', '300.00'),
       categoria('Lazer', '100.00'),
@@ -241,7 +241,7 @@ describe('SummaryScreen', () => {
   it('clicar na categoria abre o popup com o total e as transações', async () => {
     const user = userEvent.setup()
     vi.mocked(api.summary).mockResolvedValue(resumo('6500.00'))
-    vi.mocked(api.categories).mockResolvedValue([LAZER])
+    vi.mocked(api.categoryBreakdown).mockResolvedValue([LAZER])
     montar()
 
     await user.click(await screen.findByRole('button', { name: /Lazer/ }))
