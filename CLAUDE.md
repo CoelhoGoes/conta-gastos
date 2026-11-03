@@ -338,7 +338,7 @@ do `FastAPI(...)` em `backend/app/main.py`, que é o que o `/docs` da API mostra
 A fila de trabalho vive em `docs/roadmap.md`. Consulte esse arquivo quando eu perguntar o
 que falta ou o que vem a seguir — não a reproduza aqui.
 
-**Em andamento:** filtrar lançamentos no SQL em `/summary` e `/trend`, se ficar lento.
+**Em andamento:** nenhum item — o próximo sai de **Depois** em `docs/roadmap.md`.
 
 Backend e frontend estão pareados: todo endpoint tem tela que o usa. Antes de propor
 "arrumar" algo que parece desleixo, cheque **Dívidas conhecidas** no `dominio.md` — várias

@@ -10,21 +10,17 @@ usuário é registrado no `CHANGELOG.md`.
 
 ## Em andamento
 
-- [ ] Filtrar lançamentos no SQL em `/summary` e `/trend`, se ficar lento
+Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
 
 ## Próximo
 
 Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do código.
 
-- [ ] Dar ao `Base` (`infra/database.py`) uma `naming_convention` no padrão do SQLAlchemy
-      (`pk_…`, `fk_…`, `uq_…`, `ck_…`), para o autogenerate nomear as constraints — hoje ele
-      gera `drop_constraint(None, …)` para FK e a migração precisa nomeá-la à mão. Exige uma
-      migração que renomeie as PKs e FKs atuais, que têm o nome padrão do Postgres; o
-      `alembic check` não compara esses nomes, então sem ela o banco diverge do código sem
-      aviso. Decidido na validação da categoria no servidor, 01/11/2026
+Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
 
 ## Depois
 
+- [ ] Filtrar lançamentos no SQL em `/summary` e `/trend`, se ficar lento
 - [ ] Reavaliar o `deptry` (dependências Python declaradas e nunca importadas) quando o
       `requirements.txt` crescer. Testado em 18/09/2026 com 8 dependências: 5 achados, 5 falsos
       positivos — `uvicorn` vem do `CMD` do Dockerfile, `psycopg` da string da `DATABASE_URL`,
