@@ -356,8 +356,8 @@ o padrão que o router usava — falha com erro de atributo.
 Postgres dá à FK.
 **Como se manifesta:** o `downgrade()` gerado tem `drop_constraint(None, …)` e falha.
 **O que fazer:** nomeie a FK na migração com o nome que o Postgres daria
-(`<tabela>_<coluna>_fkey`); o `alembic check` continua limpo. A `naming_convention` que
-resolve isso ficou como item do roadmap.
+(`<tabela>_<coluna>_fkey`); o `alembic check` continua limpo. Resolvido depois pela
+`naming_convention` do `Base` — ver `2026-11-01-convencao-de-nomes-das-constraints.md`.
 
 ### Testar a importação na tela com extrato real
 

@@ -26,9 +26,9 @@ def upgrade() -> None:
     sa.Column('usuario_id', sa.Integer(), nullable=False),
     sa.Column('mes', sa.Date(), nullable=False),
     sa.Column('valor', sa.Numeric(precision=12, scale=2), nullable=False),
-    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('usuario_id', 'mes', name='uq_renda_mes')
+    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ondelete='CASCADE', name=op.f('rendas_usuario_id_fkey')),
+    sa.PrimaryKeyConstraint('id', name=op.f('rendas_pkey')),
+    sa.UniqueConstraint('usuario_id', 'mes', name=op.f('uq_renda_mes'))
     )
     op.create_index(op.f('ix_rendas_usuario_id'), 'rendas', ['usuario_id'], unique=False)
     # ### end Alembic commands ###

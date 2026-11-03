@@ -10,12 +10,16 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
 
 - **`infra/database.py`** — SQLAlchemy engine/session (`DATABASE_URL` env var, defaults to local
   Postgres). `get_session()` is the FastAPI dependency that yields a session per request.
+  `Base.metadata` carries the `naming_convention` (`pk_`, `fk_`, `uq_`, `ck_`, `ix_`, the
+  SQLAlchemy pattern), so every constraint and index gets a predictable name: leave them
+  unnamed in `models.py`, except a check, which takes a short name the convention completes
+  (`name="periodo"` → `ck_rendas_periodo`).
 - **`infra/models.py`** — five tables: `User` (email, bcrypt hash, `closing_day`), `Entry`
   (`type` gasto/entrada, `amount`, `method` avista/credito, `installments`, `category_id`),
   `Category` (`categorias`: `type`, `name`, `order`, unique on type+name — the closed lists,
   global, seeded by a migration), `Income` (the
   fixed-income history: `start`, and `end` or null for open-ended; incomes may overlap and
-  sum, `ck_renda_periodo` keeps `end >= start`) and `IncomePart` (`partes_renda`: 1 to 4 per
+  sum, `ck_rendas_periodo` keeps `end >= start`) and `IncomePart` (`partes_renda`: 1 to 4 per
   income, each with `amount`, `rule` — `dia_fixo`/`dia_util`/`ultimo_dia_util`, or null for an
   income from before the payday existed — `day` and `next_month`; cascade-deleted with the
   income, loaded with it by `selectin`). `Entry.category` is a read-only property returning
@@ -25,11 +29,11 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   the existing Portuguese DB columns (e.g. `usuarios`, `lancamentos`, `rendas`, `valor` — see **Language
   conventions**). Money columns are always
   `Numeric(12,2)`, never float. `Entry.import_id` (`id_importacao`) holds the origin of an imported
-  line (`BANKID:ACCTID:FITID`) and is null for a typed entry; the `uq_lancamento_importacao`
+  line (`BANKID:ACCTID:FITID`) and is null for a typed entry; the `uq_lancamentos_usuario_id_id_importacao`
   constraint on (`usuario_id`, `id_importacao`) is what stops a re-imported statement from
   duplicating rows — nulls don't collide in Postgres. `User.deleted_at` (`excluido_em`) is the
   soft delete: filled in, the account is gone for the API but the row and its entries stay.
-  That is why `email` has no plain `unique`: the partial index `uq_usuarios_email_ativo`
+  That is why `email` has no plain `unique`: the partial unique index `ix_usuarios_email`
   (`WHERE excluido_em IS NULL`) keeps it unique only among active accounts, so a deleted
   account's email can register again. Any lookup by email must filter `deleted_at IS NULL` —
   there can be more than one row with it (`_active_user` in `api/auth.py`).
@@ -128,7 +132,14 @@ mapping to the frontend layers are in `CLAUDE.md` → **Architecture**.
   its schema from the models and would not notice, so two guards run that check: `./dev.sh`,
   against the dev Postgres on every start (warns in red, does not block), and
   `tests/test_migrations.py`, which applies the migrations to an empty database — Postgres
-  only, since the migrations do not run on sqlite. `backend/alembic` is mounted into the API
+  only, since the migrations do not run on sqlite. `alembic check` does not compare PK or FK
+  names, so `test_migrations.py` also compares every constraint and index name in the
+  database with the models. Alembic applies the `naming_convention` to the operations of
+  **every** migration, old ones included: a name in a migration goes through `op.f(...)`, as
+  autogenerate writes it. It only changes the result for a check (the one convention that
+  uses the given name — without it `ck_renda_periodo` came out `ck_rendas_ck_renda_periodo`),
+  but the old migrations carry it on every name so a fresh database and an existing one get
+  the same names at every revision. `backend/alembic` is mounted into the API
   container, so a new migration needs only `docker compose restart api`; a new dependency in
   `requirements.txt` still needs `--build`. `alembic/versions/` is excluded from ruff
   (generated from a template) but `alembic/env.py` is linted; `env.py` imports `DATABASE_URL`

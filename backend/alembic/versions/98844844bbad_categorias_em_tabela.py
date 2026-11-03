@@ -38,8 +38,8 @@ def upgrade() -> None:
     sa.Column('tipo', sa.String(length=10), nullable=False),
     sa.Column('nome', sa.String(length=50), nullable=False),
     sa.Column('ordem', sa.Integer(), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('tipo', 'nome', name='uq_categoria_tipo_nome')
+    sa.PrimaryKeyConstraint('id', name=op.f('categorias_pkey')),
+    sa.UniqueConstraint('tipo', 'nome', name=op.f('uq_categoria_tipo_nome'))
     )
     op.bulk_insert(categorias, [
         {"tipo": tipo, "nome": nome, "ordem": ordem}
@@ -68,7 +68,7 @@ def upgrade() -> None:
     """)
     op.alter_column('lancamentos', 'categoria_id', nullable=False)
     op.create_index(op.f('ix_lancamentos_categoria_id'), 'lancamentos', ['categoria_id'], unique=False)
-    op.create_foreign_key(FK, 'lancamentos', 'categorias', ['categoria_id'], ['id'], ondelete='RESTRICT')
+    op.create_foreign_key(op.f(FK), 'lancamentos', 'categorias', ['categoria_id'], ['id'], ondelete='RESTRICT')
     op.drop_column('lancamentos', 'categoria')
 
 
@@ -80,7 +80,7 @@ def downgrade() -> None:
         FROM categorias c WHERE c.id = l.categoria_id
     """)
     op.alter_column('lancamentos', 'categoria', nullable=False)
-    op.drop_constraint(FK, 'lancamentos', type_='foreignkey')
+    op.drop_constraint(op.f(FK), 'lancamentos', type_='foreignkey')
     op.drop_index(op.f('ix_lancamentos_categoria_id'), table_name='lancamentos')
     op.drop_column('lancamentos', 'categoria_id')
     op.drop_table('categorias')

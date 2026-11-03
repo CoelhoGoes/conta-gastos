@@ -2,6 +2,7 @@
 
 | Início | Feature | Status |
 |--------|---------|--------|
+| 2026-11-01 | [Convenção de nomes das constraints](2026-11-01-convencao-de-nomes-das-constraints.md) | concluído |
 | 2026-11-01 | [Categoria validada no servidor](2026-11-01-categoria-validada-no-servidor.md) | concluído |
 | 2026-10-30 | [Dia em que a renda cai](2026-10-30-dia-em-que-a-renda-cai.md) | concluído |
 | 2026-10-30 | [Saldo cumulativo](2026-10-30-saldo-cumulativo.md) | concluído |

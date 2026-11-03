@@ -239,6 +239,12 @@ conversar antes.
   suíte padrão. Duas guardas cobrem o buraco: o `./dev.sh` roda `alembic check` contra o
   Postgres de desenvolvimento e avisa em vermelho, e `tests/test_migrations.py` sobe as
   migrações e roda o check quando a suíte é executada com `TEST_DATABASE_URL`.
+- **O `alembic check` não compara nome de PK nem de FK.** As constraints seguem a
+  `naming_convention` do `Base`, e quem confere que o banco tem esses nomes é um teste de
+  `tests/test_migrations.py`, num banco montado do zero — roda só com `TEST_DATABASE_URL`, e
+  ninguém confere o banco de desenvolvimento. Um nome divergente no banco de dev só aparece
+  quando uma migração tenta renomeá-lo ou apagá-lo. Decidido em 01/11/2026, no lugar de um
+  comparador próprio no `alembic/env.py`.
 - **O container da API não enxerga dependência nova sem rebuild.** O `docker-compose.yml`
   monta `backend/app` e `backend/alembic` do host, mas o `requirements.txt` só é instalado no
   build da imagem. Código que importa uma dependência nova roda sobre a imagem antiga e a API

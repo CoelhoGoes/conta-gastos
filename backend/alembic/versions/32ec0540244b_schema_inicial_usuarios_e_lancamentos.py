@@ -28,7 +28,7 @@ def upgrade() -> None:
     sa.Column('renda_mensal', sa.Numeric(precision=12, scale=2), nullable=False),
     sa.Column('dia_fechamento', sa.Integer(), nullable=False),
     sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id', name=op.f('usuarios_pkey'))
     )
     op.create_index(op.f('ix_usuarios_email'), 'usuarios', ['email'], unique=True)
     op.create_table('lancamentos',
@@ -42,8 +42,8 @@ def upgrade() -> None:
     sa.Column('forma', sa.String(length=10), nullable=False),
     sa.Column('parcelas', sa.Integer(), nullable=False),
     sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ondelete='CASCADE', name=op.f('lancamentos_usuario_id_fkey')),
+    sa.PrimaryKeyConstraint('id', name=op.f('lancamentos_pkey'))
     )
     op.create_index(op.f('ix_lancamentos_data'), 'lancamentos', ['data'], unique=False)
     op.create_index(op.f('ix_lancamentos_usuario_id'), 'lancamentos', ['usuario_id'], unique=False)

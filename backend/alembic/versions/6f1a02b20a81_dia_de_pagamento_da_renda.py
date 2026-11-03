@@ -27,10 +27,10 @@ def upgrade() -> None:
     sa.Column('regra', sa.String(length=20), nullable=True),
     sa.Column('dia', sa.Integer(), nullable=True),
     sa.Column('mes_seguinte', sa.Boolean(), nullable=False),
-    sa.CheckConstraint('valor > 0', name='ck_parte_renda_valor'),
-    sa.CheckConstraint("regra IN ('dia_fixo', 'ultimo_dia_util', 'dia_util')", name='ck_parte_renda_regra'),
-    sa.ForeignKeyConstraint(['renda_id'], ['rendas.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.CheckConstraint('valor > 0', name=op.f('ck_parte_renda_valor')),
+    sa.CheckConstraint("regra IN ('dia_fixo', 'ultimo_dia_util', 'dia_util')", name=op.f('ck_parte_renda_regra')),
+    sa.ForeignKeyConstraint(['renda_id'], ['rendas.id'], ondelete='CASCADE', name=op.f('partes_renda_renda_id_fkey')),
+    sa.PrimaryKeyConstraint('id', name=op.f('partes_renda_pkey'))
     )
     op.create_index(op.f('ix_partes_renda_renda_id'), 'partes_renda', ['renda_id'], unique=False)
     op.add_column('rendas', sa.Column('inicio', sa.Date(), nullable=True))
@@ -52,10 +52,10 @@ def upgrade() -> None:
     op.execute("DELETE FROM rendas WHERE valor = 0")
 
     op.alter_column('rendas', 'inicio', nullable=False)
-    op.drop_constraint('uq_renda_mes', 'rendas', type_='unique')
+    op.drop_constraint(op.f('uq_renda_mes'), 'rendas', type_='unique')
     op.drop_column('rendas', 'mes')
     op.drop_column('rendas', 'valor')
-    op.create_check_constraint('ck_renda_periodo', 'rendas', 'fim IS NULL OR fim >= inicio')
+    op.create_check_constraint(op.f('ck_renda_periodo'), 'rendas', 'fim IS NULL OR fim >= inicio')
 
 
 def downgrade() -> None:
@@ -74,9 +74,9 @@ def downgrade() -> None:
     """)
     op.alter_column('rendas', 'mes', nullable=False)
     op.alter_column('rendas', 'valor', nullable=False)
-    op.drop_constraint('ck_renda_periodo', 'rendas', type_='check')
+    op.drop_constraint(op.f('ck_renda_periodo'), 'rendas', type_='check')
     op.drop_column('rendas', 'fim')
     op.drop_column('rendas', 'inicio')
-    op.create_unique_constraint('uq_renda_mes', 'rendas', ['usuario_id', 'mes'])
+    op.create_unique_constraint(op.f('uq_renda_mes'), 'rendas', ['usuario_id', 'mes'])
     op.drop_index(op.f('ix_partes_renda_renda_id'), table_name='partes_renda')
     op.drop_table('partes_renda')

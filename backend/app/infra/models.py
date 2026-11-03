@@ -25,7 +25,7 @@ class User(Base):
     # e-mail único só entre contas ativas: uma conta excluída libera o e-mail para recadastro
     __table_args__ = (
         Index(
-            "uq_usuarios_email_ativo",
+            None,
             "email",
             unique=True,
             postgresql_where=text("excluido_em IS NULL"),
@@ -59,7 +59,7 @@ class Income(Base):
     Rendas podem se sobrepor — dois empregos somam."""
 
     __tablename__ = "rendas"
-    __table_args__ = (CheckConstraint("fim IS NULL OR fim >= inicio", name="ck_renda_periodo"),)
+    __table_args__ = (CheckConstraint("fim IS NULL OR fim >= inicio", name="periodo"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
@@ -82,9 +82,9 @@ class IncomePart(Base):
 
     __tablename__ = "partes_renda"
     __table_args__ = (
-        CheckConstraint("valor > 0", name="ck_parte_renda_valor"),
+        CheckConstraint("valor > 0", name="valor"),
         CheckConstraint(
-            "regra IN ('dia_fixo', 'ultimo_dia_util', 'dia_util')", name="ck_parte_renda_regra"
+            "regra IN ('dia_fixo', 'ultimo_dia_util', 'dia_util')", name="regra"
         ),
     )
 
@@ -105,7 +105,7 @@ class Category(Base):
     criou a tabela; mudar a lista é uma migração nova."""
 
     __tablename__ = "categorias"
-    __table_args__ = (UniqueConstraint("tipo", "nome", name="uq_categoria_tipo_nome"),)
+    __table_args__ = (UniqueConstraint("tipo", "nome"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     type: Mapped[str] = mapped_column("tipo", String(10))  # gasto | entrada
@@ -116,7 +116,7 @@ class Category(Base):
 class Entry(Base):
     __tablename__ = "lancamentos"
     # reimportar o mesmo extrato não pode duplicar; nulos não conflitam no Postgres
-    __table_args__ = (UniqueConstraint("usuario_id", "id_importacao", name="uq_lancamento_importacao"),)
+    __table_args__ = (UniqueConstraint("usuario_id", "id_importacao"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(

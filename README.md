@@ -121,6 +121,11 @@ docker compose exec api alembic check
   `downgrade()`.
 - A mensagem segue as que já existem: português, minúsculas, sem acento — ela vira o nome do
   arquivo.
+- **Nome de constraint vem da convenção.** O `Base` (`infra/database.py`) tem uma
+  `naming_convention`: deixe a constraint sem nome no modelo (o check leva só um nome curto,
+  como `name="periodo"`) e o autogenerate escreve o nome com `op.f(...)` na ida e na volta.
+  Não tire o `op.f()`: num check ele impede que o nome passe de novo pela convenção e saia
+  dobrado. As migrações antigas também o usam, para manter os nomes que já tinham.
 - O banco precisa estar em `head` antes do passo 1, senão o autogenerate compara com um schema
   velho. Basta o container ter subido depois do último `git pull`.
 
@@ -128,8 +133,9 @@ Sem Docker, os mesmos comandos rodam de dentro de `backend/`, com o venv e as va
 acima: `alembic revision --autogenerate -m "..."`, `alembic upgrade head`, `alembic check`.
 
 Duas coisas conferem isso depois: o `./dev.sh` roda o `alembic check` a cada início e avisa em
-vermelho, e o `tests/test_migrations.py` aplica as migrações num banco vazio — só roda contra
-Postgres (ver [Testes](#testes)). A suíte do dia a dia, em sqlite, monta o schema a partir dos
+vermelho, e o `tests/test_migrations.py` aplica as migrações num banco vazio e compara também
+os nomes das constraints, que o `alembic check` não confere — só roda contra Postgres (ver
+[Testes](#testes)). A suíte do dia a dia, em sqlite, monta o schema a partir dos
 modelos e não percebe migração faltando.
 
 ### Checagem de código
@@ -150,7 +156,7 @@ cd frontend && npx -y knip                    # código e dependências sem uso 
 
 ```bash
 pip install -r backend/requirements-dev.txt   # uma vez
-cd backend && pytest                          # 251 testes (5 pulados em sqlite), ~35s
+cd backend && pytest                          # 251 testes (8 pulados em sqlite), ~35s
 
 cd frontend && npm test                       # 151 testes, ~6s
 ```
