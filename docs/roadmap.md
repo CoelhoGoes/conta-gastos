@@ -10,17 +10,17 @@ usuário é registrado no `CHANGELOG.md`.
 
 ## Em andamento
 
-Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
+- [ ] Corrigir a paleta de cores do site: como usuário, quero que o site tenha uma paleta de
+      cores clara e coesa com a linguagem do site, que me deixe entender rapidamente o que
+      acontece nele, com a menor margem para erros possível
 
 ## Próximo
 
 Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do código.
 
-Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
-
-## Depois
-
-- [ ] Filtrar lançamentos no SQL em `/summary` e `/trend`, se ficar lento
+- [ ] Possível refatoração: a tela de Renda descarta o retorno do `POST`/`PUT /incomes` e pede a
+      lista de novo — um `GET` a mais por gravação, que em troca traz as próximas datas pela data
+      do aparelho (a resposta usa a data UTC do servidor). Mesmo achado, 31/10/2026
 - [ ] Reavaliar o `deptry` (dependências Python declaradas e nunca importadas) quando o
       `requirements.txt` crescer. Testado em 18/09/2026 com 8 dependências: 5 achados, 5 falsos
       positivos — `uvicorn` vem do `CMD` do Dockerfile, `psycopg` da string da `DATABASE_URL`,
@@ -29,19 +29,20 @@ Vazio: o próximo item sai de **Depois**, na ordem que for combinada.
       `[tool.deptry.package_module_name_map]` e `[tool.deptry.per_rule_ignores]`, mas a lista de
       ignorados vira mais uma coisa a manter em sincronia, e hoje a lista inteira de
       dependências cabe na cabeça
-- [ ] Tirar o `overrides` de `deepmerge` (fixado em 4.1.2) do `frontend/package.json` quando
-      sair versão corrigida do GHSA-gcqx-w48m-w2h4. Entra pelo CLI do `shadcn`, que pede
-      `^4.3.1`. Motivo em `docs/features/2026-10-26-vulnerabilidades-do-frontend.md`
 - [ ] Anotar como `Mapped[Decimal]` a coluna de dinheiro `Entry.amount` em `models.py`, hoje
       `Mapped[float]` (a `IncomePart.amount`, de 31/10/2026, já nasceu `Decimal`). A coluna é
       `Numeric` e já devolve `Decimal`, então só a anotação está errada. Achado da revisão estrutural do saldo cumulativo, 30/10/2026
+
+## Depois
+
+- [ ] Filtrar lançamentos no SQL em `/summary` e `/trend`, se ficar lento
+- [ ] Tirar o `overrides` de `deepmerge` (fixado em 4.1.2) do `frontend/package.json` quando
+      sair versão corrigida do GHSA-gcqx-w48m-w2h4. Entra pelo CLI do `shadcn`, que pede
+      `^4.3.1`. Motivo em `docs/features/2026-10-26-vulnerabilidades-do-frontend.md`
 - [ ] Possível refatoração: os limites do formulário de renda (4 partes, dia até 23 ou 31) estão
       repetidos em `IncomeScreen.tsx` e em `api/schemas.py`. Hoje é o mesmo padrão do dia de
       fechamento (28); vale juntar se os limites passarem a mudar. Achado da revisão estrutural
       do dia em que a renda cai, 31/10/2026
-- [ ] Possível refatoração: a tela de Renda descarta o retorno do `POST`/`PUT /incomes` e pede a
-      lista de novo — um `GET` a mais por gravação, que em troca traz as próximas datas pela data
-      do aparelho (a resposta usa a data UTC do servidor). Mesmo achado, 31/10/2026
 - [ ] Avaliar se o próprio usuário pode criar categorias personalizadas, além das listas fechadas.
       Viabilidade ainda não avaliada. Ficou de fora da validação da categoria no servidor,
       01/11/2026 — que criou a tabela `categorias`, hoje global (sem `usuario_id`)
