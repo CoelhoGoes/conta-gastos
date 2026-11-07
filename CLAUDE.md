@@ -346,7 +346,8 @@ do `FastAPI(...)` em `backend/app/main.py`, que é o que o `/docs` da API mostra
 A fila de trabalho vive em `docs/roadmap.md`. Consulte esse arquivo quando eu perguntar o
 que falta ou o que vem a seguir — não a reproduza aqui.
 
-**Em andamento:** corrigir a paleta de cores do site, para ficar clara e coesa com a linguagem do site.
+**Em andamento:** a tela de Renda pede a lista de novo depois de gravar, em vez de usar a
+resposta do `POST`/`PUT /incomes` — avaliar se vale a refatoração (sem documento de feature ainda).
 
 Backend e frontend estão pareados: todo endpoint tem tela que o usa. Antes de propor
 "arrumar" algo que parece desleixo, cheque **Dívidas conhecidas** no `dominio.md` — várias

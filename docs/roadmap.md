@@ -10,17 +10,14 @@ usuário é registrado no `CHANGELOG.md`.
 
 ## Em andamento
 
-- [ ] Corrigir a paleta de cores do site: como usuário, quero que o site tenha uma paleta de
-      cores clara e coesa com a linguagem do site, que me deixe entender rapidamente o que
-      acontece nele, com a menor margem para erros possível
+- [ ] Possível refatoração: a tela de Renda descarta o retorno do `POST`/`PUT /incomes` e pede a
+      lista de novo — um `GET` a mais por gravação, que em troca traz as próximas datas pela data
+      do aparelho (a resposta usa a data UTC do servidor). Mesmo achado, 31/10/2026
 
 ## Próximo
 
 Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do código.
 
-- [ ] Possível refatoração: a tela de Renda descarta o retorno do `POST`/`PUT /incomes` e pede a
-      lista de novo — um `GET` a mais por gravação, que em troca traz as próximas datas pela data
-      do aparelho (a resposta usa a data UTC do servidor). Mesmo achado, 31/10/2026
 - [ ] Reavaliar o `deptry` (dependências Python declaradas e nunca importadas) quando o
       `requirements.txt` crescer. Testado em 18/09/2026 com 8 dependências: 5 achados, 5 falsos
       positivos — `uvicorn` vem do `CMD` do Dockerfile, `psycopg` da string da `DATABASE_URL`,
