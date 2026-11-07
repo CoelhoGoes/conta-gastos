@@ -302,6 +302,11 @@ conversar antes.
 - **A amostra de categorias dos testes de tela está repetida.** `EntryScreen.test.tsx` e
   `ImportScreen.test.tsx` declaram o mesmo recorte do `GET /categories`; juntar pede um arquivo
   de fixture, que não compensa por duas cópias. Mesmo achado, 01/11/2026.
+- **A tela de Renda relê a lista depois de gravar.** O `POST` e o `PUT /incomes` devolvem a
+  renda gravada, mas `IncomeScreen` a descarta e faz um `GET /incomes` a mais: é ele que traz a
+  próxima data de cada parte pela data do aparelho (a resposta da gravação usa a data UTC do
+  servidor) e as rendas registradas em outra aba. O item de refatoração foi avaliado e tirado
+  do roadmap pelo usuário em 07/11/2026; o ganho em jogo era um pedido a menos por gravação.
 
 ## O que eu ainda não entendo do que herdei
 

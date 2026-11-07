@@ -10,14 +10,6 @@ usuário é registrado no `CHANGELOG.md`.
 
 ## Em andamento
 
-- [ ] Possível refatoração: a tela de Renda descarta o retorno do `POST`/`PUT /incomes` e pede a
-      lista de novo — um `GET` a mais por gravação, que em troca traz as próximas datas pela data
-      do aparelho (a resposta usa a data UTC do servidor). Mesmo achado, 31/10/2026
-
-## Próximo
-
-Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do código.
-
 - [ ] Reavaliar o `deptry` (dependências Python declaradas e nunca importadas) quando o
       `requirements.txt` crescer. Testado em 18/09/2026 com 8 dependências: 5 achados, 5 falsos
       positivos — `uvicorn` vem do `CMD` do Dockerfile, `psycopg` da string da `DATABASE_URL`,
@@ -26,6 +18,11 @@ Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do 
       `[tool.deptry.package_module_name_map]` e `[tool.deptry.per_rule_ignores]`, mas a lista de
       ignorados vira mais uma coisa a manter em sincronia, e hoje a lista inteira de
       dependências cabe na cabeça
+
+## Próximo
+
+Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do código.
+
 - [ ] Anotar como `Mapped[Decimal]` a coluna de dinheiro `Entry.amount` em `models.py`, hoje
       `Mapped[float]` (a `IncomePart.amount`, de 31/10/2026, já nasceu `Decimal`). A coluna é
       `Numeric` e já devolve `Decimal`, então só a anotação está errada. Achado da revisão estrutural do saldo cumulativo, 30/10/2026
