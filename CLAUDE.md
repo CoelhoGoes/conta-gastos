@@ -130,12 +130,18 @@ frontend/
     ├── test-setup.ts          vitest setup (jest-dom matchers)
     ├── presentation/
     │   ├── pages/             one file per screen (Login/Summary/Entry/Invoice/Income/Import/Config)
+    │   ├── hooks/
+    │   │   └── use-mobile.ts  useIsMobile (below 768px), installed by the shadcn CLI
     │   └── components/
-    │       ├── Page.tsx       authenticated screen shell: navbar + content capped at max-w-6xl
-    │       ├── Header.tsx     full-width sticky navbar, used by every authenticated screen
+    │       ├── Page.tsx       authenticated screen shell: sidebar/bottom nav + content up to max-w-6xl
+    │       ├── AppSidebar.tsx desktop side menu (shadcn Sidebar); exports NAV_ITEMS
+    │       ├── BottomNav.tsx  phone tab bar: the first four NAV_ITEMS
     │       ├── MonthNav.tsx   month stepper, shared by Summary, Entry and Invoice
+    │       ├── EntryDialog.tsx  create/edit entry dialog (full screen on phone) + LaunchButton
+    │       ├── Amount.tsx     "R$ x" in the colour and sign of its kind; "R$ ••••" when hidden
+    │       ├── CategoryBars.tsx   category spending as Progress bars, top five + "Outras"
+    │       ├── UpcomingInvoices.tsx  next invoices with installments already committed
     │       ├── TrendChart.tsx trend chart, lazy-loaded so recharts stays out of the main bundle
-    │       ├── CategoryDonut.tsx  category donut, lazy-loaded for the same reason
     │       ├── ChartSwatch.tsx    color square for chart legends and tooltips
     │       ├── ChartTooltipRow.tsx  "name … R$ value" tooltip row
     │       ├── LineIcon.tsx       line/dashed marker for line series in legend and tooltip
@@ -147,12 +153,14 @@ frontend/
     │       ├── MoneyRow.tsx       "R$ x" value of a <dl> row, optional +/- sign
     │       ├── CategoryTotal.tsx  "R$ x · y% do gasto do mês"
     │       ├── RowActions.tsx     edit + delete (second click confirms) of a list row
-    │       └── ui/            shadcn components: badge, button, card, chart, checkbox,
-    │                          dialog, input, label, native-select, table, toggle,
-    │                          toggle-group
+    │       └── ui/            shadcn components: alert-dialog, badge, button, card, chart,
+    │                          checkbox, dialog, empty, input, input-group, label,
+    │                          native-select, progress, separator, sheet, sidebar,
+    │                          skeleton, table, textarea, toggle, toggle-group, tooltip
     ├── state/
     │   ├── auth-context.tsx   AuthProvider / useAuth
-    │   └── theme.ts           light/dark/system, per device in localStorage
+    │   ├── theme.ts           light/dark/system, per device in localStorage
+    │   └── privacy.ts         hide money values, per device in localStorage
     ├── data/
     │   └── api.ts             typed HTTP client
     └── shared/
@@ -210,7 +218,7 @@ npm run gen:types  # regenerate src/shared/api-schema.d.ts from the running API
 pip install -r backend/requirements-dev.txt   # once
 cd backend && pytest                          # 251 tests (8 skipped on sqlite), ~35s
 
-cd frontend && npm test                       # 151 tests, ~6s
+cd frontend && npm test                       # 183 tests, ~9s
 ```
 
 `backend/tests/test_service.py` needs no database: `service.py` is pure, so the tests use plain

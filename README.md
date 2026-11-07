@@ -158,7 +158,7 @@ cd frontend && npx -y knip                    # código e dependências sem uso 
 pip install -r backend/requirements-dev.txt   # uma vez
 cd backend && pytest                          # 251 testes (8 pulados em sqlite), ~35s
 
-cd frontend && npm test                       # 151 testes, ~6s
+cd frontend && npm test                       # 183 testes, ~9s
 ```
 
 Os testes de `backend/tests/test_service.py` e `test_ofx.py` não precisam de banco —
@@ -210,12 +210,18 @@ frontend/
     ├── index.css      Tailwind v4 + tokens de tema do shadcn
     ├── presentation/  o que aparece na tela
     │   ├── pages/     uma tela por arquivo (Login/Summary/Entry/Invoice/Income/Import/Config)
+    │   ├── hooks/
+    │   │   └── use-mobile.ts   useIsMobile (abaixo de 768px), instalado pelo CLI do shadcn
     │   └── components/
-    │       ├── Page.tsx        invólucro das telas logadas: navbar + conteúdo até 1152px
-    │       ├── Header.tsx      navbar de ponta a ponta, compartilhada entre as telas
-    │       ├── MonthNav.tsx    passo de mês, compartilhado por resumo, lançamentos e fatura
+    │       ├── Page.tsx        invólucro das telas logadas: menu lateral/abas + conteúdo até 1152px
+    │       ├── AppSidebar.tsx  menu lateral do computador (Sidebar do shadcn)
+    │       ├── BottomNav.tsx   abas do rodapé no celular
+    │       ├── MonthNav.tsx    passo de mês, compartilhado por Início, Extrato e Fatura
+    │       ├── EntryDialog.tsx janela de lançar e editar (tela cheia no celular) + botão Lançar
+    │       ├── Amount.tsx      "R$ x" na cor e com o sinal do tipo; "R$ ••••" quando escondido
+    │       ├── CategoryBars.tsx   gasto por categoria em barras, cinco maiores + "Outras"
+    │       ├── UpcomingInvoices.tsx  próximas faturas, com o que já está parcelado
     │       ├── TrendChart.tsx  gráfico de tendência (carregado sob demanda)
-    │       ├── CategoryDonut.tsx  rosca de gasto por categoria (carregada sob demanda)
     │       ├── ChartSwatch.tsx    quadradinho de cor das legendas e tooltips
     │       ├── ChartTooltipRow.tsx  linha "nome … R$ valor" dos tooltips
     │       ├── LineIcon.tsx       traço das séries de linha na legenda e no tooltip
@@ -227,12 +233,14 @@ frontend/
     │       ├── MoneyRow.tsx       valor "R$ x" de uma linha de resumo
     │       ├── CategoryTotal.tsx  "R$ x · y% do gasto do mês"
     │       ├── RowActions.tsx     editar e excluir (com confirmação) numa linha de lista
-    │       └── ui/             componentes shadcn (badge, button, card, chart, checkbox,
-    │                           dialog, input, label, native-select, table, toggle,
-    │                           toggle-group)
+    │       └── ui/             componentes shadcn (alert-dialog, badge, button, card, chart,
+    │                           checkbox, dialog, empty, input, input-group, label,
+    │                           native-select, progress, separator, sheet, sidebar,
+    │                           skeleton, table, textarea, toggle, toggle-group, tooltip)
     ├── state/
     │   ├── auth-context.tsx    AuthProvider / useAuth
-    │   └── theme.ts            tema claro/escuro/sistema, por aparelho no localStorage
+    │   ├── theme.ts            tema claro/escuro/sistema, por aparelho no localStorage
+    │   └── privacy.ts          esconder os valores, por aparelho no localStorage
     ├── data/
     │   └── api.ts     cliente HTTP tipado (JWT, header, tratamento de 401)
     └── shared/        usado por qualquer camada, não depende de nenhuma
@@ -318,15 +326,17 @@ Antes de expor na internet:
 ## Estado atual
 
 **Funciona:** registro, login, sessão persistida em `localStorage`, roteamento multi-página
-(`/login`, `/`, `/lancamentos`, `/fatura`, `/renda`, `/importar`, `/configuracoes`), tela de resumo mensal
-(saldo acumulado e do mês, renda com o dia de cada pagamento, fatura, gasto por categoria num gráfico de rosca com as transações de cada
-categoria num popup, e gráfico de tendência dos últimos meses), tela de lançamentos (criar,
-editar, listar e excluir gastos/entradas do mês), tela de fatura (consulta por mês, com
-navegação entre meses), tela de renda (histórico com início e fim, até 4 partes por renda,
+(`/login`, `/`, `/lancamentos`, `/fatura`, `/renda`, `/importar`, `/configuracoes`), Início com o resumo
+mensal (saldo acumulado e do mês, renda com o dia de cada pagamento, fatura, gasto por
+categoria em barras com as transações de cada categoria numa janela, e gráfico de tendência dos
+últimos meses), Extrato (criar, editar, buscar, filtrar e excluir gastos/entradas do mês, com a
+janela de lançar), Fatura (consulta por mês, com as próximas faturas e o andamento das
+parcelas), tela de renda (histórico com início e fim, até 4 partes por renda,
 cada uma num dia fixo, N-ésimo ou último dia útil, com feriados nacionais), importação de
 extrato OFX com conferência antes de gravar, e tela de configuração (dia de fechamento, tema claro/escuro seguindo o sistema por padrão,
 e exclusão da conta). No computador, as telas usam a largura da tela em colunas; no celular, uma
-coluna só.
+coluna só, com abas no rodapé. Visual de banco digital nos temas claro e escuro, e um olho no
+Início que esconde os valores.
 Backend completo com todos os endpoints acima; o schema é das migrações Alembic.
 
 **Ainda não existe:** exportar os dados, trocar e-mail ou senha, entre outros — a fila
