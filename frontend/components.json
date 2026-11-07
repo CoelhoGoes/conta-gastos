@@ -17,7 +17,7 @@
     "utils": "cn",
     "ui": "@/presentation/components/ui",
     "lib": "@/shared",
-    "hooks": "@/hooks"
+    "hooks": "@/presentation/hooks"
   },
   "menuColor": "default",
   "menuAccent": "subtle",
