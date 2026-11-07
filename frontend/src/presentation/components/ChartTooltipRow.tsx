@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
-import { formatCurrency } from '@/shared/format'
+import { Amount } from '@/presentation/components/Amount'
 import { ChartSwatch } from '@/presentation/components/ChartSwatch'
 
 // Linha "nome … R$ valor" dos tooltips dos gráficos. Com `color`, mostra a cor da série; com
 // `marker`, mostra ele no lugar do quadradinho (o traço das séries de linha, por exemplo).
+// O valor passa pelo Amount, que o esconde junto com os outros (UC12).
 export function ChartTooltipRow({
   name,
   value,
@@ -21,7 +22,7 @@ export function ChartTooltipRow({
         {marker ?? (color && <ChartSwatch color={color} />)}
         {name}
       </span>
-      <span className="tabular-nums">R$ {formatCurrency(String(value))}</span>
+      <Amount value={String(value)} />
     </span>
   )
 }

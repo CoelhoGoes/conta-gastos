@@ -4,6 +4,7 @@ import {
   formatCurrency,
   formatCurrencyInteger,
   formatDayMonth,
+  formatMonthLong,
   formatPercent,
   shiftMonth,
 } from './format'
@@ -90,5 +91,11 @@ describe('formatDayMonth', () => {
 
   it('preserva o zero à esquerda', () => {
     expect(formatDayMonth('2026-01-05')).toBe('05/01')
+  })
+})
+
+describe('formatMonthLong', () => {
+  it('escreve o mês por extenso, sem o "de"', () => {
+    expect(formatMonthLong('2026-11')).toBe('novembro 2026')
   })
 })

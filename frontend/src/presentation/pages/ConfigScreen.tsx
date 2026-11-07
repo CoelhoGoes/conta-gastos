@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router'
+import { RiLogoutBoxRLine } from '@remixicon/react'
 import { api } from '@/data/api'
 import { useAuth } from '@/state/auth-context'
 import { getTheme, setTheme, type Theme } from '@/state/theme'
 import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
 import { Label } from '@/presentation/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/presentation/components/ui/card'
 import { Page } from '@/presentation/components/Page'
 import { ChoiceToggle } from '@/presentation/components/ChoiceToggle'
 import { ErrorText } from '@/presentation/components/ErrorText'
@@ -18,7 +20,8 @@ const THEMES: { value: Theme; label: string }[] = [
 ]
 
 export function ConfigScreen() {
-  const { user, updateUser, deleteAccount } = useAuth()
+  const { user, updateUser, deleteAccount, logout } = useAuth()
+  const navigate = useNavigate()
   // Sem valor inventado: os defaults reais vivem em models.py e chegam pelo /auth/me.
   // A rota só renderiza com `user` carregado, então na prática estes campos vêm cheios.
   const [closingDay, setClosingDay] = useState(user ? String(user.closing_day) : '')
@@ -66,11 +69,29 @@ export function ConfigScreen() {
 
   return (
     // no desktop: dados à esquerda, aparência e excluir conta empilhados à direita
-    <Page active="configuracoes" className="md:grid md:grid-cols-2 md:items-start">
+    <Page
+      active="configuracoes"
+      actions={
+        // Sair mora aqui, no celular e no computador (UC11)
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            logout()
+            navigate('/login')
+          }}
+        >
+          <RiLogoutBoxRLine data-icon="inline-start" />
+          Sair
+        </Button>
+      }
+      className="md:grid md:grid-cols-2 md:items-start"
+    >
       <div className="flex flex-col gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Configurações</CardTitle>
+            <CardTitle>Fatura do cartão</CardTitle>
+            {user && <CardDescription>{user.email}</CardDescription>}
           </CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} className="flex flex-col gap-4">

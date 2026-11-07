@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { api } from '@/data/api'
 import { formatCurrencyInteger, formatMonthShort } from '@/shared/format'
+import { useHiddenValues } from '@/state/privacy'
 import type { Summary } from '@/shared/types'
 import { NativeSelect, NativeSelectOption } from '@/presentation/components/ui/native-select'
 import { ChartTooltipRow } from '@/presentation/components/ChartTooltipRow'
@@ -22,20 +23,20 @@ const PRESETS = [3, 6, 12] as const
 
 // As duas barras empilham porque cash_expenses + invoice é exatamente o total_spent
 // do mês (docs/dominio.md). A linha responde outra pergunta: quanto sobrou.
-// Os tokens --chart-* são uma rampa de verdes iguais nos dois temas, então a ordem
-// importa: as barras ficam com dois tons distinguíveis entre si e o saldo usa
-// --foreground, que inverte com o tema e é o traço mais legível sobre qualquer fundo.
-// O saldo do mês (sem o que vem dos anteriores) fica em azul, --chart-month-balance, fora da
-// rampa verde como a renda; o acumulado continua sendo o traço em destaque.
+// As barras são gasto, então ficam nos laranjas: à vista na cor de gasto (--expense) e a
+// fatura num laranja de outra claridade (--chart-5). As linhas ficam nos verdes: o saldo
+// acumulado no mais contrastado (--chart-balance), para continuar sendo o traço em destaque,
+// e o saldo do mês (sem o que vem dos anteriores) num verde de outra claridade. A renda é
+// tracejada e cinza (--chart-income), para se separar dos dois verdes e das barras.
 // A renda é uma série, não uma ReferenceLine: só assim entra na legenda
 // do shadcn (o Legend do recharts 3.8 não aceita item avulso) e some dela junto com a linha
 // quando a renda é zero.
 const config = {
-  cash_expenses: { label: 'À vista', color: 'var(--chart-2)' },
-  invoice: { label: 'Fatura', color: 'var(--chart-4)' },
+  cash_expenses: { label: 'À vista', color: 'var(--expense)' },
+  invoice: { label: 'Fatura', color: 'var(--chart-5)' },
   available_balance: {
     label: 'Saldo acumulado',
-    color: 'var(--foreground)',
+    color: 'var(--chart-balance)',
     icon: () => <LineIcon color="var(--color-available_balance)" />,
   },
   month_balance: {
@@ -63,6 +64,7 @@ export function TrendChart({ until }: { until: string }) {
   const [months, setMonths] = useState<number>(6)
   const [points, setPoints] = useState<Point[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const hidden = useHiddenValues()
 
   useEffect(() => {
     let ativo = true
@@ -117,7 +119,10 @@ export function TrendChart({ until }: { until: string }) {
             {/* rótulos em --foreground: o cinza #666 que o recharts põe some no tema escuro, e o
                 seletor do shadcn que o trocaria (.recharts-cartesian-axis-tick text) não casa
                 com o recharts 3.8 */}
+            {/* com os valores escondidos (UC12) o eixo de reais some; as barras e linhas ficam, sem
+                escala não dizem quanto */}
             <YAxis
+              hide={hidden}
               width="auto"
               tickLine={false}
               axisLine={false}

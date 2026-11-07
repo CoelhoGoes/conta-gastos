@@ -12,45 +12,58 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.527 0.154 150.069);
-  --primary-foreground: oklch(0.982 0.018 155.826);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.871 0.15 154.449);
-  --chart-2: oklch(0.723 0.219 149.579);
-  --chart-3: oklch(0.627 0.194 149.214);
-  --chart-4: oklch(0.527 0.154 150.069);
-  --chart-5: oklch(0.448 0.119 151.328);
-  /* renda no gráfico de tendência: âmbar fora da rampa verde, para a linha tracejada não se
-     confundir com as barras nem com o saldo. Provisório até a paleta nova */
-  --chart-income: oklch(0.666 0.179 58.318);
-  --chart-month-balance: oklch(0.546 0.245 262.881);
-  --radius: 0.625rem;
-  /* altura da navbar a partir de md, onde ela cabe numa linha. O formulário fixo de
-     Lançamentos gruda logo abaixo dela; abaixo de md a navbar tem duas linhas e altura livre */
-  --header-height: 3.3125rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.627 0.194 149.214);
-  --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* paleta do canvas (docs/features/2026-11-03-paleta-de-cores.md): verde é marca e entrada,
+     laranja é saída e cor extra de gráfico, vermelho é só erro e apagar, o resto é cinza */
+  --background: #f5f5f3;
+  --foreground: #1a1a19;
+  --card: #ffffff;
+  --card-foreground: #1a1a19;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a19;
+  --primary: #266447;
+  --primary-foreground: #ffffff;
+  --secondary: #efefed;
+  --secondary-foreground: #1a1a19;
+  --muted: #efefed;
+  --muted-foreground: #5e5e5b;
+  --accent: #efefed;
+  --accent-foreground: #1a1a19;
+  --destructive: #c62140;
+  --border: #e4e4e1;
+  --input: #8a8a87;
+  --ring: #32805d;
+  /* cabeçalho verde do Início, que a barra do navegador acompanha (theme-color) */
+  --hero: #266447;
+  --hero-foreground: #ffffff;
+  /* entrada verde e gasto laranja em todo valor; o saldo negativo usa a cor do gasto. Os
+     *-muted são o fundo do círculo da seta de cada linha */
+  --income: #266447;
+  --income-muted: #e8f2ed;
+  --expense: #b4411d;
+  --expense-muted: #fbeee9;
+  /* barras de categoria, na ordem: verde, laranja, verde-escuro, laranja-claro, laranja-escuro.
+     O cinza fica só para "Outras" */
+  --chart-1: #266447;
+  --chart-2: #c74821;
+  --chart-3: #0f3222;
+  --chart-4: #d9653d;
+  --chart-5: #72260e;
+  --chart-others: #8a8a87;
+  /* linhas do gráfico de tendência: os dois saldos em verdes de claridades diferentes e a
+     renda em cinza frio, que contrasta com os dois e com as barras laranja */
+  --chart-balance: #194732;
+  --chart-month-balance: #32805d;
+  --chart-income: #59595b;
+  --radius: 0.75rem;
+  /* a sidebar no verde do --hero; o item ativo é branco a 14% sobre ele (5,0:1 com o texto) */
+  --sidebar: #266447;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #266447;
+  --sidebar-accent: #447a61;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #1f523a;
+  --sidebar-ring: #ffffff;
 }
 
 @theme inline {
@@ -69,6 +82,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-income: var(--income);
+  --color-income-muted: var(--income-muted);
+  --color-expense-muted: var(--expense-muted);
+  --color-chart-others: var(--chart-others);
+  --color-expense: var(--expense);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -98,39 +118,47 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.448 0.119 151.328);
-  --primary-foreground: oklch(0.982 0.018 155.826);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.871 0.15 154.449);
-  --chart-2: oklch(0.723 0.219 149.579);
-  --chart-3: oklch(0.627 0.194 149.214);
-  --chart-4: oklch(0.527 0.154 150.069);
-  --chart-5: oklch(0.448 0.119 151.328);
-  --chart-income: oklch(0.828 0.189 84.429);
-  --chart-month-balance: oklch(0.707 0.165 254.624);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.723 0.219 149.579);
-  --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #121211;
+  --foreground: #ececec;
+  --card: #1f1f1e;
+  --card-foreground: #ececec;
+  --popover: #1f1f1e;
+  --popover-foreground: #ececec;
+  --primary: #47ae7f;
+  --primary-foreground: #121211;
+  --secondary: #2a2a29;
+  --secondary-foreground: #ececec;
+  --muted: #2a2a29;
+  --muted-foreground: #a3a3a0;
+  --accent: #2a2a29;
+  --accent-foreground: #ececec;
+  --destructive: #ff6a7c;
+  --border: #2e2e2d;
+  --input: #6e6e6b;
+  --ring: #47ae7f;
+  --hero: #173f2d;
+  --hero-foreground: #ffffff;
+  --income: #47ae7f;
+  --income-muted: #1b3326;
+  --expense: #ff7a5c;
+  --expense-muted: #3a2219;
+  --chart-1: #47ae7f;
+  --chart-2: #ff7a5c;
+  --chart-3: #93eabe;
+  --chart-4: #ffb0a5;
+  --chart-5: #ffcdc7;
+  --chart-others: #797976;
+  --chart-balance: #93eabe;
+  --chart-month-balance: #3e996f;
+  --chart-income: #9b9b9e;
+  --sidebar: #173f2d;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #173f2d;
+  --sidebar-accent: #375a4a;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2a4e3e;
+  --sidebar-ring: #ffffff;
 }
 
 @layer base {

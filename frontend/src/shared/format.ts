@@ -42,6 +42,14 @@ export function formatMonthShort(month: string) {
   return `${nome}/${String(year).slice(-2)}`
 }
 
+// "2026-11" -> "novembro 2026". O mês que está na tela, entre as setas do MonthNav.
+const MONTH_LONG = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
+
+export function formatMonthLong(month: string) {
+  const [year, mon] = month.split('-').map(Number)
+  return MONTH_LONG.format(new Date(year, mon - 1, 1)).replace(' de ', ' ')
+}
+
 export function shiftMonth(month: string, delta: number) {
   const [year, mon] = month.split('-').map(Number)
   const date = new Date(year, mon - 1 + delta, 1)

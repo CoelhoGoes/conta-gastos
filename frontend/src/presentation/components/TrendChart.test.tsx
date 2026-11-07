@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setHiddenValues } from '@/state/privacy'
+import { ChartTooltipRow } from './ChartTooltipRow'
 import { TrendChart } from './TrendChart'
 
 vi.mock('@/data/api', () => ({ api: { trend: vi.fn() } }))
@@ -34,6 +36,19 @@ describe('TrendChart', () => {
     expect(months).toBe(6)
     // o servidor não deve adivinhar o mês: quem manda é a tela — ver docs/dominio.md
     expect(until).toBe('2026-09')
+  })
+
+  // UC6: barras nos laranjas, saldos nos verdes e renda em cinza. O ChartContainer do shadcn
+  // escreve a cor de cada série num <style>, como --color-<série>
+  it('pinta as barras de laranja, os saldos de verde e a renda de cinza', async () => {
+    const { container } = render(<TrendChart until="2026-09" />)
+    await waitFor(() => expect(container.querySelector('style')).not.toBeNull())
+    const estilo = container.querySelector('style')!.textContent
+    expect(estilo).toContain('--color-cash_expenses: var(--expense)')
+    expect(estilo).toContain('--color-invoice: var(--chart-5)')
+    expect(estilo).toContain('--color-available_balance: var(--chart-balance)')
+    expect(estilo).toContain('--color-income: var(--chart-income)')
+    expect(estilo).toContain('--color-month_balance: var(--chart-month-balance)')
   })
 
   // UC2
@@ -87,5 +102,15 @@ describe('TrendChart', () => {
     expect(await screen.findByText('Sessão expirada.')).toBeInTheDocument()
     // F2: dá para tentar outro período
     expect(screen.getByRole('combobox', { name: 'Período' })).toBeEnabled()
+  })
+
+  // UC12: o tooltip do gráfico é onde o valor do mês aparece; o recharts não desenha o tooltip
+  // no jsdom, então a linha é testada sozinha. O eixo de reais (hide) fica para a tela.
+  it('o valor do tooltip some com os valores escondidos', () => {
+    setHiddenValues(true)
+    render(<ChartTooltipRow name="Fatura" value={400} />)
+    expect(screen.getByRole('img', { name: 'valor escondido' })).toHaveTextContent('R$ ••••')
+    expect(screen.queryByText(/400/)).not.toBeInTheDocument()
+    setHiddenValues(false)
   })
 })

@@ -13,10 +13,14 @@ e o versionamento tenta seguir [SemVer](https://semver.org/lang/pt-BR/).
   do servidor, só deixam de ser acessíveis
 - Tema escuro. Por padrão o app segue o modo claro ou escuro do aparelho; em Configurações
   dá para fixar claro ou escuro, e a escolha vale só para aquele aparelho
-- No resumo, clicar numa categoria (na legenda ou na fatia do gráfico) abre uma janela com as
-  transações daquela categoria no mês
-- No resumo, clicar no gasto do mês, no centro do gráfico de rosca, abre uma janela com todas
-  as categorias do mês, da que mais gastou para a que menos gastou
+- No Início, clicar numa categoria abre uma janela com as transações daquela categoria no mês
+- No Início, "Ver todas" abre uma janela com todas as categorias do mês, da que mais gastou
+  para a que menos gastou
+- Olho no Início para esconder os valores: todo valor em reais vira "R$ ••••", em todas as
+  telas, até tocar de novo. A escolha vale só para aquele aparelho
+- Busca e filtro no Extrato: por descrição (sem diferença de acento ou maiúscula) e por
+  entradas, saídas ou crédito. No celular, os lançamentos aparecem agrupados por dia
+- Na fatura, as próximas faturas com o que já está parcelado, e o andamento de cada parcela
 - Aba Renda, com o histórico da renda fixa: cada renda vale de uma data de início até um fim
   opcional, então mudar a renda não reescreve os meses passados, e duas rendas ao mesmo tempo
   se somam. A renda pode ser dividida em até 4 partes, cada uma num dia fixo, no N-ésimo dia
@@ -36,18 +40,24 @@ e o versionamento tenta seguir [SemVer](https://semver.org/lang/pt-BR/).
   diz ao leitor de tela qual item ele apaga
 - O saldo disponível passou a ser acumulado: o que sobra ou falta num mês passa para o
   seguinte, também nos meses futuros. O saldo só do mês continua logo abaixo, no resumo e nos
-  lançamentos, e ganhou uma linha azul no gráfico de tendência
-- No computador, as telas passam a usar a largura da tela: resumo, lançamentos e configurações
-  mostram os blocos lado a lado, e na tela de lançamentos o formulário fica visível enquanto a
-  lista rola. No celular continua uma coluna só
-- A navegação virou uma barra fixa no topo, com todas as abas visíveis e a aba atual destacada;
-  no celular as abas aparecem só com o ícone
-- O gasto por categoria no resumo virou um gráfico de rosca com o total do mês no centro; as
-  cinco maiores categorias aparecem uma a uma e as demais ficam agrupadas em "Outras"
+  lançamentos, e ganhou uma linha própria no gráfico de tendência
+- Visual novo, no estilo dos apps de banco digital, no celular e no computador, no tema claro
+  e no escuro. Verde é dinheiro entrando e o que é bom; laranja, dinheiro saindo; vermelho só
+  aparece em erro e em excluir; o resto é cinza. A fatura mostra os valores sem sinal
+- No computador, as telas usam a largura da tela, com os blocos lado a lado. No celular
+  continua uma coluna só
+- A navegação virou um menu lateral verde no computador e abas fixas no rodapé no celular
+  (Início, Extrato, Fatura e Renda; Importar e Configurações ficam no Início). O Sair foi para
+  Configurações
+- Lançar um gasto ou entrada abre uma janela (a tela inteira, no celular), de qualquer tela
+  com o botão Lançar. Fechar com algo digitado pede confirmação antes de descartar
+- O Resumo virou Início, com o saldo em destaque, e a tela de lançamentos virou Extrato
+- O gasto por categoria no Início virou uma lista com barras; as cinco maiores categorias
+  aparecem uma a uma e as demais ficam agrupadas em "Outras"
 - O gráfico de tendência do resumo ganhou legenda, valores no eixo vertical e um ponto por mês
   na linha do saldo; o período (3, 6 ou 12 meses) virou um seletor, e a linha da renda e os
   nomes dos meses ficaram legíveis no tema escuro
-- A aba do navegador mostra o nome da tela aberta (Resumo, Lançamentos, Fatura, Importar,
+- A aba do navegador mostra o nome da tela aberta (Início, Extrato, Fatura, Importar,
   Configurações, Entrar) em vez de "frontend-tmp", e a página se declara em português, então
   leitores de tela leem com a pronúncia certa e o navegador não oferece tradução
 - Na tela de lançamentos, a opção escolhida em tipo (gasto/entrada) e forma (à vista/crédito)

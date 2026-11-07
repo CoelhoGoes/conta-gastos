@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { RiAddLine, RiDeleteBinLine } from '@remixicon/react'
 import { ApiError, api } from '@/data/api'
-import { formatCurrency, formatDate, formatDayMonth, todayIso } from '@/shared/format'
+import { formatDate, formatDayMonth, todayIso } from '@/shared/format'
 import type { Income, IncomeIn, IncomePart, PaydayRule } from '@/shared/types'
 import { Button } from '@/presentation/components/ui/button'
 import { Input } from '@/presentation/components/ui/input'
@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/presentation/components/ui/dialog'
 import { Page } from '@/presentation/components/Page'
+import { Amount } from '@/presentation/components/Amount'
 import { ErrorText } from '@/presentation/components/ErrorText'
 import { RowActions } from '@/presentation/components/RowActions'
 import { StatusText } from '@/presentation/components/StatusText'
@@ -332,7 +333,7 @@ export function IncomeScreen() {
                     <ul className="flex flex-col gap-1 text-sm">
                       {income.parts.map((part, i) => (
                         <li key={i} className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="tabular-nums">R$ {formatCurrency(part.amount)}</span>
+                          <Amount value={part.amount} />
                           <span className="text-muted-foreground">
                             {describeDay(part.rule, part.day)}
                             {part.next_month && ' · conta no mês seguinte'}

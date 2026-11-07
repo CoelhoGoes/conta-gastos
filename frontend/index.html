@@ -4,15 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f5f3" />
     <script>
       // mesma regra de src/state/theme.ts, antes do primeiro paint: sem isto o tema escuro
-      // abre com um piscar claro enquanto o React carrega
+      // abre com um piscar claro enquanto o React carrega. A barra do navegador no celular
+      // acompanha, com o --background de index.css: o CSS ainda não carregou aqui, então esta
+      // é a única cópia da cor (depois, o theme.ts lê do CSS)
       const tema = localStorage.getItem('gf:theme')
-      const escuro = matchMedia('(prefers-color-scheme: dark)').matches
-      document.documentElement.classList.toggle(
-        'dark',
-        tema === 'dark' || (tema !== 'light' && escuro),
-      )
+      const escuro =
+        tema === 'dark' || (tema !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+      document.documentElement.classList.toggle('dark', escuro)
+      document
+        .querySelector('meta[name="theme-color"]')
+        .setAttribute('content', escuro ? '#121211' : '#f5f5f3')
     </script>
   </head>
   <body>

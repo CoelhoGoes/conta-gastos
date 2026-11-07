@@ -5,7 +5,8 @@ import { Button } from '@/presentation/components/ui/button'
 interface RowActionsProps {
   /** Como a linha é chamada nos rótulos: "Editar feira", "Excluir feira". */
   name: string
-  onEdit: () => void
+  /** Sem ele, só o excluir: é o caso de dentro do Lançar, que já é a edição. */
+  onEdit?: () => void
   onDelete: () => Promise<unknown>
 }
 
@@ -34,16 +35,18 @@ export function RowActions({ name, onEdit, onDelete }: RowActionsProps) {
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-label={`Editar ${name}`}
-        title="Editar"
-        onClick={onEdit}
-      >
-        <RiPencilLine />
-      </Button>
+      {onEdit && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={`Editar ${name}`}
+          title="Editar"
+          onClick={onEdit}
+        >
+          <RiPencilLine />
+        </Button>
+      )}
       <Button
         type="button"
         variant="destructive"

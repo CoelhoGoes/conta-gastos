@@ -1,11 +1,10 @@
-import { formatCurrency } from '@/shared/format'
+import { Amount, type AmountKind } from '@/presentation/components/Amount'
 
-// O valor de uma linha de <dl>, alinhado pelos dígitos, com o sinal opcional em cinza.
-export function MoneyRow({ value, signal }: { value: string; signal?: '+' | '-' }) {
+// O valor de uma linha de <dl>, alinhado pelos dígitos, na cor do que ele é (ver Amount).
+export function MoneyRow({ value, kind }: { value: string; kind?: AmountKind }) {
   return (
-    <dd className="tabular-nums">
-      {signal && <span className="text-muted-foreground">{signal} </span>}
-      R$ {formatCurrency(value)}
+    <dd>
+      <Amount value={value} kind={kind} />
     </dd>
   )
 }

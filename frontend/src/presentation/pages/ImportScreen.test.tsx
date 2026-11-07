@@ -146,6 +146,22 @@ describe('ImportScreen', () => {
     expect(seletor).not.toHaveTextContent('Mercado')
   })
 
+  // UC4
+  it('entrada aparece em verde e gasto em laranja, cada um com o sinal', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.previewImport).mockResolvedValue([
+      linha({ type: 'entrada', description: 'SALARIO', amount: '1500.00', import_id: '0341:123:B' }),
+      linha(),
+    ])
+    montar()
+
+    await lerExtrato(user)
+    const entrada = await screen.findByText('R$ 1.500,00')
+    expect(entrada).toHaveClass('text-income')
+    expect(entrada).toHaveTextContent('+R$ 1.500,00')
+    expect(screen.getByText('R$ 20,00')).toHaveClass('text-expense')
+  })
+
   it('mostra o motivo quando o servidor recusa o arquivo', async () => {
     const user = userEvent.setup()
     vi.mocked(api.previewImport).mockRejectedValue(

@@ -5,6 +5,10 @@
 export type Theme = 'system' | 'light' | 'dark'
 
 const THEME_KEY = 'gf:theme'
+// a cor da barra do navegador no celular: o --background do tema, ou o --hero quando o Início
+// mostra o cabeçalho verde, para a barra emendar com ele. Lida do index.css, depois de trocar
+// a classe, para não copiar a cor aqui; só o script do index.html guarda uma cópia do fundo.
+let heroBar = false
 const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)')
 
 export function getTheme(): Theme {
@@ -17,7 +21,19 @@ function isDark(theme: Theme) {
 }
 
 function applyTheme() {
-  document.documentElement.classList.toggle('dark', isDark(getTheme()))
+  const dark = isDark(getTheme())
+  document.documentElement.classList.toggle('dark', dark)
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue(heroBar ? '--hero' : '--background')
+    .trim()
+  // sem o CSS carregado a variável vem vazia: melhor manter a cor do index.html que apagar
+  if (color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
+}
+
+// o Início liga ao montar e desliga ao sair; a troca de tema no meio respeita a escolha
+export function setHeroBar(on: boolean) {
+  heroBar = on
+  applyTheme()
 }
 
 export function setTheme(theme: Theme) {

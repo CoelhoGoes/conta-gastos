@@ -1,66 +1,94 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
+import { RiArrowDownLine, RiArrowUpLine, RiSearchLine } from '@remixicon/react'
+import { cn } from 'cn'
 import { api } from '@/data/api'
-import { currentMonth, formatCurrency, todayIso } from '@/shared/format'
-import type { EntryCreate, EntryMethod, EntryOut, EntryType, Summary } from '@/shared/types'
+import { currentMonth, formatDayMonth } from '@/shared/format'
+import type { EntryOut, Summary } from '@/shared/types'
 import { Button } from '@/presentation/components/ui/button'
-import { Input } from '@/presentation/components/ui/input'
-import { Label } from '@/presentation/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card'
+import { Card, CardContent } from '@/presentation/components/ui/card'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/presentation/components/ui/empty'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/presentation/components/ui/input-group'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/presentation/components/ui/table'
+import { useIsMobile } from '@/presentation/hooks/use-mobile'
 import { Page } from '@/presentation/components/Page'
 import { MonthNav } from '@/presentation/components/MonthNav'
 import { ChoiceToggle } from '@/presentation/components/ChoiceToggle'
-import { CategorySelect } from '@/presentation/components/CategorySelect'
 import { RowActions } from '@/presentation/components/RowActions'
-import { MoneyRow } from '@/presentation/components/MoneyRow'
 import { ErrorText } from '@/presentation/components/ErrorText'
 import { StatusText } from '@/presentation/components/StatusText'
+import { Amount } from '@/presentation/components/Amount'
+import { EntryDialog, LaunchButton } from '@/presentation/components/EntryDialog'
 
-const TYPES = [
-  { value: 'gasto', label: 'Gasto' },
-  { value: 'entrada', label: 'Entrada' },
-] as const satisfies readonly { value: EntryType; label: string }[]
+type Filter = 'tudo' | 'entrada' | 'gasto' | 'credito'
 
-const METHODS = [
-  { value: 'avista', label: 'À vista' },
+const FILTERS = [
+  { value: 'tudo', label: 'Tudo' },
+  { value: 'entrada', label: 'Entradas' },
+  { value: 'gasto', label: 'Saídas' },
   { value: 'credito', label: 'Crédito' },
-] as const satisfies readonly { value: EntryMethod; label: string }[]
+] as const satisfies readonly { value: Filter; label: string }[]
 
-interface FormState {
-  type: EntryType
-  amount: string
-  description: string
-  category: string
-  date: string
-  method: EntryMethod
-  installments: string
+// busca sem diferença de maiúsculas e acentos: "acai" acha "Açaí"
+const fold = (text: string) =>
+  text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR')
+
+function matches(entry: EntryOut, query: string, filter: Filter) {
+  if (filter === 'credito' ? entry.method !== 'credito' : filter !== 'tudo' && entry.type !== filter)
+    return false
+  return fold(entry.description).includes(fold(query.trim()))
 }
 
-/** O lançamento no formato do formulário — os inputs trabalham com string. */
-function formFromEntry(entry: EntryOut): FormState {
-  return {
-    type: entry.type,
-    amount: entry.amount,
-    description: entry.description,
-    category: entry.category,
-    date: entry.date,
-    method: entry.method ?? 'avista',
-    installments: String(entry.installments ?? 1),
-  }
+function method(entry: EntryOut) {
+  if (entry.method === 'credito') return `Crédito ${entry.installments}x`
+  return entry.method === 'avista' ? 'À vista' : 'Importado'
 }
 
-function defaultForm(): FormState {
-  return {
-    type: 'gasto',
-    amount: '',
-    description: '',
-    category: '',
-    date: todayIso(),
-    method: 'avista',
-    installments: '1',
+// O círculo com a seta que diz, além da cor, se o dinheiro entrou ou saiu (F1)
+function Arrow({ entry }: { entry: EntryOut }) {
+  const income = entry.type === 'entrada'
+  const Icon = income ? RiArrowUpLine : RiArrowDownLine
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'flex size-9 shrink-0 items-center justify-center rounded-full',
+        income ? 'bg-income-muted text-income' : 'bg-expense-muted text-expense',
+      )}
+    >
+      <Icon className="size-4" />
+    </span>
+  )
+}
+
+// A lista do mês por dia, na ordem em que a API devolve
+function byDay(entries: EntryOut[]) {
+  const days: { date: string; entries: EntryOut[] }[] = []
+  for (const entry of entries) {
+    const last = days.at(-1)
+    if (last?.date === entry.date) last.entries.push(entry)
+    else days.push({ date: entry.date, entries: [entry] })
   }
+  return days
 }
 
 export function EntryScreen() {
+  const isMobile = useIsMobile()
   const [month, setMonth] = useState(currentMonth())
   // salvar e excluir pedem recarga mudando esta chave, em vez de buscar direto: assim a
   // busca sempre usa o mês que está na tela, mesmo se ele mudou durante o salvamento
@@ -70,14 +98,12 @@ export function EntryScreen() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
-
-  const [form, setForm] = useState<FormState>(defaultForm())
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  // null = criando um lançamento novo; um id = editando aquele
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const descriptionRef = useRef<HTMLInputElement>(null)
-
+  // separado do listError: a recarga que segue uma exclusão falha não pode apagar o aviso
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<Filter>('tudo')
+  // undefined = fechado; null = lançamento novo; um lançamento = editar aquele
+  const [editing, setEditing] = useState<EntryOut | null | undefined>(undefined)
 
   useEffect(() => {
     let ativo = true
@@ -97,260 +123,195 @@ export function EntryScreen() {
     }
   }, [month, reloadKey])
 
-  function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => {
-      const next = { ...f, [key]: value }
-      if (key === 'type') {
-        next.category = ''
-        if (value === 'entrada') {
-          next.method = 'avista'
-          next.installments = '1'
-        }
-      }
-      if (key === 'method' && value === 'avista') {
-        next.installments = '1'
-      }
-      return next
-    })
-  }
-
-  function startEditing(entry: EntryOut) {
-    setForm(formFromEntry(entry))
-    setEditingId(entry.id)
-    setFormError(null)
-    // no celular o formulário fica acima da lista, fora da tela; o foco o traz de volta
-    descriptionRef.current?.focus()
-  }
-
-  function stopEditing() {
-    setForm(defaultForm())
-    setEditingId(null)
-    setFormError(null)
-  }
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    setSubmitting(true)
-    setFormError(null)
-    try {
-      const payload: EntryCreate = {
-        type: form.type,
-        amount: form.amount,
-        description: form.description,
-        category: form.category,
-        date: form.date,
-        method: form.type === 'gasto' ? form.method : 'avista',
-        installments:
-          form.type === 'gasto' && form.method === 'credito'
-            ? Number(form.installments)
-            : 1,
-      }
-      if (editingId === null) {
-        await api.createEntry(payload)
-      } else {
-        await api.updateEntry(editingId, payload)
-      }
-      stopEditing()
-      reload()
-    } catch (e) {
-      setFormError((e as Error).message)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   function remove(id: number) {
+    setDeleteError(null)
     return api
       .removeEntry(id)
-      .then(() => {
-        // apagou o que estava no formulário: não sobra nada para salvar
-        if (editingId === id) stopEditing()
+      .then(reload)
+      .catch((e: Error) => {
+        setDeleteError(e.message)
+        // F13: pode ter sumido em outra aba; a lista volta a bater com o servidor
         reload()
       })
-      .catch((e: Error) => setListError(e.message))
   }
 
+  const shown = entries?.filter((e) => matches(e, query, filter)) ?? []
+  const searching = query.trim() !== '' || filter !== 'tudo'
+  const clearSearch = () => {
+    setQuery('')
+    setFilter('tudo')
+  }
 
   return (
-    // no desktop: saldo + formulário à esquerda, grudados abaixo da navbar (--header-height + o
-    // p-6 do <main>), para editar um item no fim da lista sem a página pular.
-    // Só gruda com 48rem de altura: numa janela baixa (iPhone deitado) o formulário é mais alto
-    // que a tela, e grudado o "Salvar" ficaria inalcançável até o fim da lista
-    <Page active="lancamentos" className="md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:items-start">
-      <div className="flex flex-col gap-6 md:[@media(min-height:48rem)]:sticky md:top-[calc(var(--header-height)+--spacing(6))]">
-        {summary && (
-          <Card>
-            <CardContent>
-              {/* o mesmo par do resumo: acumulado em destaque, o do mês embaixo */}
-              <dl className="flex flex-col gap-1 text-sm">
-                <div className="flex items-center justify-between">
-                  <dt className="text-muted-foreground">Saldo disponível — {month}</dt>
-                  <dd className="font-medium tabular-nums">
-                    R$ {formatCurrency(summary.available_balance)}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <dt>Saldo do mês</dt>
-                  <MoneyRow value={summary.month_balance} />
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <form onSubmit={onSubmit}>
-            <CardHeader>
-              <CardTitle>{editingId === null ? 'Novo lançamento' : 'Editar lançamento'}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <ChoiceToggle
-                aria-label="Tipo"
-                fill
-                options={TYPES}
-                value={form.type}
-                onChange={(v) => updateForm('type', v)}
-              />
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="description">Descrição</Label>
-                <Input
-                  ref={descriptionRef}
-                  id="description"
-                  type="text"
-                  maxLength={200}
-                  value={form.description}
-                  onChange={(e) => updateForm('description', e.target.value)}
-                  required
-                />
+    <Page
+      active="lancamentos"
+      actions={
+        <>
+          <LaunchButton size="lg" className="md:order-last" onClick={() => setEditing(null)} />
+          {/* no celular o mês desce para uma linha própria, de ponta a ponta */}
+          <MonthNav month={month} onChange={setMonth} className="max-md:order-last max-md:w-full" />
+        </>
+      }
+    >
+      {summary && (
+        <Card size="sm">
+          <CardContent>
+            {/* no celular, uma linha por valor; a partir de lg, três colunas */}
+            <dl className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-4">
+              <div className="flex items-baseline justify-between gap-2 lg:flex-col">
+                <dt className="text-sm text-muted-foreground">Saldo disponível</dt>
+                <dd className="font-bold lg:text-xl">
+                  <Amount value={summary.available_balance} kind="saldo" />
+                </dd>
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="category">Categoria</Label>
-                <CategorySelect
-                  id="category"
-                  type={form.type}
-                  value={form.category}
-                  onChange={(c) => updateForm('category', c)}
-                  placeholder="Selecione"
-                  required
-                />
+              <div className="flex items-baseline justify-between gap-2 lg:flex-col">
+                <dt className="text-sm text-muted-foreground">Saldo do mês</dt>
+                <dd className="font-bold lg:text-xl">
+                  <Amount value={summary.month_balance} kind="saldo" />
+                </dd>
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="amount">Valor</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={form.amount}
-                  onChange={(e) => updateForm('amount', e.target.value)}
-                  required
-                />
+              <div className="flex items-baseline justify-between gap-2 lg:flex-col">
+                <dt className="text-sm text-muted-foreground">Gasto do mês</dt>
+                <dd className="font-bold lg:text-xl">
+                  <Amount value={summary.total_spent} kind="gasto" />
+                </dd>
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="date">Data</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => updateForm('date', e.target.value)}
-                  required
-                />
-              </div>
-
-              {form.type === 'gasto' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label id="method-label">Forma</Label>
-                  <ChoiceToggle
-                    aria-labelledby="method-label"
-                    fill
-                    options={METHODS}
-                    value={form.method}
-                    onChange={(v) => updateForm('method', v)}
-                  />
-                </div>
-              )}
-
-              {form.type === 'gasto' && form.method === 'credito' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="installments">Parcelas</Label>
-                  <Input
-                    id="installments"
-                    type="number"
-                    min={1}
-                    max={48}
-                    value={form.installments}
-                    onChange={(e) => updateForm('installments', e.target.value)}
-                    required
-                  />
-                </div>
-              )}
-
-              <ErrorText>{formError}</ErrorText>
-
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Salvando...' : 'Salvar'}
-              </Button>
-              {editingId !== null && (
-                <Button type="button" variant="outline" onClick={stopEditing}>
-                  Cancelar
-                </Button>
-              )}
-            </CardContent>
-          </form>
+            </dl>
+          </CardContent>
         </Card>
-      </div>
+      )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Lançamentos — {month}</CardTitle>
-            <MonthNav month={month} onChange={setMonth} />
-          </div>
-        </CardHeader>
-        <CardContent>
+      <Card className="gap-0 py-0">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
+          <InputGroup className="h-11 flex-[1_1_16rem] rounded-xl bg-muted">
+            <InputGroupAddon>
+              <RiSearchLine />
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label="Buscar lançamento"
+              placeholder="Buscar lançamento"
+              className="text-base md:text-sm"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </InputGroup>
+          <ChoiceToggle aria-label="Filtro" options={FILTERS} value={filter} onChange={setFilter} />
+        </div>
+
+        <div className="p-4">
           {listLoading && <StatusText>Carregando…</StatusText>}
           <ErrorText>{listError}</ErrorText>
-          {!listLoading && entries && entries.length === 0 && (
-            <StatusText>Nenhum lançamento neste mês.</StatusText>
+          <ErrorText>{deleteError}</ErrorText>
+          {!listLoading && entries && shown.length === 0 && (
+            // F14: diz se é a busca ou o mês que está vazio
+            <Empty className="py-8">
+              <EmptyHeader>
+                <EmptyTitle>
+                  {searching ? 'Nada bate com a busca' : 'Nenhum lançamento neste mês.'}
+                </EmptyTitle>
+                {searching && (
+                  <EmptyDescription>O mês tem lançamentos, mas nenhum com esse filtro.</EmptyDescription>
+                )}
+              </EmptyHeader>
+              {searching && (
+                <Button type="button" variant="outline" onClick={clearSearch}>
+                  Limpar busca
+                </Button>
+              )}
+            </Empty>
           )}
-          {entries && entries.length > 0 && (
-            <ul className="flex flex-col divide-y divide-border">
-              {entries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"
-                >
-                  {/* min-w-0 + break-words: descrição de extrato traz palavra longa
-                      ("ESTABELECIMENTO") que, sem quebrar, empurra os botões para fora do card */}
-                  <div className="flex min-w-0 flex-col">
-                    <span className="break-words text-foreground">{entry.description}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {entry.category} · {entry.type}
-                      {entry.method === 'credito' &&
-                        ` · crédito (parcelado em ${entry.installments}x)`}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="whitespace-nowrap text-sm font-medium text-foreground">
-                      {entry.type === 'gasto' ? '-' : '+'}R${' '}
-                      {formatCurrency(entry.amount)}
-                    </span>
-                    <RowActions
-                      name={entry.description}
-                      onEdit={() => startEditing(entry)}
-                      onDelete={() => remove(entry.id)}
-                    />
-                  </div>
-                </li>
+
+          {shown.length > 0 && isMobile && (
+            // celular: por dia; tocar no item abre o Lançar preenchido, com o apagar dentro (P5)
+            <div className="flex flex-col gap-4">
+              {byDay(shown).map((day) => (
+                <section key={day.date} className="flex flex-col gap-1">
+                  <h2 className="text-sm font-semibold text-muted-foreground">
+                    {formatDayMonth(day.date)}
+                  </h2>
+                  <ul className="flex flex-col">
+                    {day.entries.map((entry) => (
+                      <li key={entry.id}>
+                        <button
+                          type="button"
+                          aria-label={`Editar ${entry.description}`}
+                          onClick={() => setEditing(entry)}
+                          className="flex w-full items-center gap-3 rounded-lg py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Arrow entry={entry} />
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            {/* break-words: descrição de extrato traz palavra longa */}
+                            <span className="font-medium break-words">{entry.description}</span>
+                            <span className="text-sm text-muted-foreground">
+                              {entry.category} · {method(entry)}
+                            </span>
+                          </span>
+                          <Amount
+                            value={entry.amount}
+                            kind={entry.type}
+                            className="font-semibold"
+                          />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           )}
-        </CardContent>
+
+          {shown.length > 0 && !isMobile && (
+            // computador: tabela; a rolagem lateral fica dentro do cartão (F8)
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Forma</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Ações</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shown.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDayMonth(entry.date)}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-2.5 font-medium whitespace-normal">
+                        <Arrow entry={entry} />
+                        {entry.description}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{entry.category}</TableCell>
+                    <TableCell className="text-muted-foreground">{method(entry)}</TableCell>
+                    <TableCell className="text-right">
+                      <Amount value={entry.amount} kind={entry.type} className="font-semibold" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <RowActions
+                          name={entry.description}
+                          onEdit={() => setEditing(entry)}
+                          onDelete={() => remove(entry.id)}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
       </Card>
+
+      {editing !== undefined && (
+        <EntryDialog entry={editing} onClose={() => setEditing(undefined)} onChanged={reload} />
+      )}
     </Page>
   )
 }

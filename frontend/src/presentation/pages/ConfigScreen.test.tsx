@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider, useAuth } from '@/state/auth-context'
 import { ConfigScreen } from './ConfigScreen'
 
@@ -83,8 +83,14 @@ describe('ConfigScreen', () => {
     beforeEach(() => {
       localStorage.clear()
       document.documentElement.classList.remove('dark')
-      vi.stubGlobal('matchMedia', () => ({ matches: true }))
+      // a Sidebar também lê o matchMedia, para saber se é celular
+      vi.stubGlobal('matchMedia', () => ({
+        matches: true,
+        addEventListener() {},
+        removeEventListener() {},
+      }))
     })
+    afterEach(() => vi.unstubAllGlobals())
 
     const botao = (nome: string) => screen.getByRole('button', { name: nome })
 
@@ -176,5 +182,13 @@ describe('ConfigScreen', () => {
     const excluir = screen.getByText('Excluir conta')
     expect(vemAntes(dados, aparencia)).toBe(true)
     expect(vemAntes(aparencia, excluir)).toBe(true)
+  })
+
+  // UC11: o Sair mora em Configurações
+  it('Sair encerra a sessão', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Sair' }))
+    expect(api.logout).toHaveBeenCalled()
   })
 })

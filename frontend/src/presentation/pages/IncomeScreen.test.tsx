@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/state/auth-context'
 import { todayIso } from '@/shared/format'
+import { setHiddenValues } from '@/state/privacy'
 import type { Income } from '@/shared/types'
 import { IncomeScreen } from './IncomeScreen'
 
@@ -80,6 +81,16 @@ describe('IncomeScreen', () => {
     expect(salario).toHaveTextContent('Dia 20')
     expect(salario).toHaveTextContent('próxima: 19/11')
     expect(salario).toHaveTextContent('Último dia útil · conta no mês seguinte')
+  })
+
+  // UC12: o valor de cada parte some junto com os outros
+  it('com os valores escondidos, não mostra quanto é cada parte', async () => {
+    setHiddenValues(true)
+    montar()
+    const rendas = await lista()
+    expect(rendas).not.toHaveTextContent('2.000,00')
+    expect(within(rendas).getAllByRole('img', { name: 'valor escondido' }).length).toBeGreaterThan(0)
+    setHiddenValues(false)
   })
 
   // UC10

@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from 'react'
 import { api } from '@/data/api'
-import { formatCurrency, formatDayMonth } from '@/shared/format'
+import { formatDayMonth } from '@/shared/format'
 import type { EntryImport, ImportPreviewItem, ImportResult } from '@/shared/types'
 import { Button } from '@/presentation/components/ui/button'
 import { Badge } from '@/presentation/components/ui/badge'
@@ -10,6 +10,7 @@ import { Page } from '@/presentation/components/Page'
 import { CategorySelect } from '@/presentation/components/CategorySelect'
 import { ErrorText } from '@/presentation/components/ErrorText'
 import { StatusText } from '@/presentation/components/StatusText'
+import { Amount } from '@/presentation/components/Amount'
 
 /** Categoria inicial de toda linha lida. Um extrato tem dezenas de lançamentos;
  *  exigir escolha em cada um antes de importar transformaria a tela em trabalho. */
@@ -173,9 +174,11 @@ export function ImportScreen() {
                           </span>
                         </div>
                       </div>
-                      <span className="shrink-0 text-sm font-medium text-foreground">
-                        {line.type === 'gasto' ? '-' : '+'}R$ {formatCurrency(line.amount)}
-                      </span>
+                      <Amount
+                        value={line.amount}
+                        kind={line.type}
+                        className="shrink-0 text-sm font-medium"
+                      />
                     </div>
 
                     {include && (

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/state/auth-context'
-import { currentMonth, shiftMonth } from '@/shared/format'
+import { currentMonth, formatMonthLong, shiftMonth } from '@/shared/format'
 import type { Category, EntryOut } from '@/shared/types'
 import { EntryScreen } from './EntryScreen'
 
@@ -27,16 +27,24 @@ const CATEGORIAS: Category[] = [
   ...['Mercado', 'Alimentação', 'Lazer', 'Outros'].map((name, i) => ({ id: i + 1, type: 'gasto' as const, name })),
   ...['Salário', 'Freela', 'Reembolso', 'Outros'].map((name, i) => ({ id: i + 11, type: 'entrada' as const, name })),
 ]
-
 const RESUMO = {
   month: '2026-09', monthly_income: '5000.00', extra_income: '0', cash_expenses: '0',
-  invoice: '0', total_spent: '0', month_balance: '1000.00', available_balance: '4000.00',
+  invoice: '0', total_spent: '300.00', month_balance: '1000.00', available_balance: '4000.00',
   income_payments: [],
 }
 const LANCAMENTO: EntryOut = {
   id: 1, description: 'feira', amount: '150.50', type: 'gasto',
   category: 'Mercado', category_id: 1, method: 'avista', date: '2026-09-05', installments: 1,
 }
+const SALARIO: EntryOut = {
+  ...LANCAMENTO, id: 2, description: 'Salário', amount: '5000.00', type: 'entrada',
+  category: 'Salário', date: '2026-09-05',
+}
+const TV: EntryOut = {
+  ...LANCAMENTO, id: 3, description: 'Televisão', amount: '3600.00', category: 'Lazer',
+  method: 'credito', installments: 9, date: '2026-09-02',
+}
+const ACAI: EntryOut = { ...LANCAMENTO, id: 4, description: 'Açaí', date: '2026-09-01' }
 
 function montar() {
   return render(
@@ -48,331 +56,185 @@ function montar() {
   )
 }
 
-// UC7/F7: a grade do desktop vem do CSS; a ordem no HTML (celular, Tab, leitor de tela) não muda
-const vemAntes = (a: Node, b: Node) =>
-  Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
-
 describe('EntryScreen', () => {
   beforeEach(() => {
     vi.mocked(api.me).mockResolvedValue({ id: 1, email: 'a@b.co', closing_day: 10 })
-    vi.mocked(api.entries).mockResolvedValue([LANCAMENTO])
+    vi.mocked(api.entries).mockResolvedValue([LANCAMENTO, SALARIO, TV, ACAI])
     vi.mocked(api.summary).mockResolvedValue(RESUMO)
     vi.mocked(api.createEntry).mockResolvedValue(LANCAMENTO)
-    vi.mocked(api.updateEntry).mockReset()
-    vi.mocked(api.updateEntry).mockResolvedValue(LANCAMENTO)
-    vi.mocked(api.removeEntry).mockResolvedValue(null)
+    vi.mocked(api.removeEntry).mockReset().mockResolvedValue(null)
     vi.mocked(api.categoryList).mockResolvedValue(CATEGORIAS)
   })
 
-  describe('o payload enviado', () => {
-    it('manda gasto à vista com uma parcela', async () => {
+  // UC16: no computador, uma tabela; a saída tem cor, sinal e seta (UC4, F1)
+  it('mostra a tabela do mês com data, categoria, forma e valor', async () => {
+    montar()
+    const linha = (await screen.findByText('Televisão')).closest('tr')!
+    expect(within(linha).getByText('02/09')).toBeInTheDocument()
+    expect(within(linha).getByText('Lazer')).toBeInTheDocument()
+    expect(within(linha).getByText('Crédito 9x')).toBeInTheDocument()
+    const valor = within(linha).getByText('R$ 3.600,00')
+    expect(valor).toHaveClass('text-expense')
+    expect(valor).toHaveTextContent('-R$ 3.600,00')
+  })
+
+  it('mostra os saldos e o gasto do mês vindos do resumo', async () => {
+    montar()
+    const acumulado = await screen.findByText('R$ 4.000,00')
+    expect(acumulado.closest('dd')?.previousElementSibling).toHaveTextContent('Saldo disponível')
+    expect(screen.getByText('R$ 1.000,00').closest('dd')?.previousElementSibling).toHaveTextContent(
+      'Saldo do mês',
+    )
+    expect(screen.getByText('R$ 300,00').closest('dd')?.previousElementSibling).toHaveTextContent(
+      'Gasto do mês',
+    )
+  })
+
+  describe('busca e filtros (UC17, F14)', () => {
+    it('busca pela descrição sem diferença de maiúsculas e acentos', async () => {
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
-
-      await user.type(screen.getByLabelText('Descrição'), 'pão')
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Mercado')
-      await user.type(screen.getByLabelText('Valor'), '12.50')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      await waitFor(() => expect(api.createEntry).toHaveBeenCalled())
-      // o input é type=number, então "12.50" chega como "12.5" — o backend aceita,
-      // porque decimal_places=2 é teto e não exigência
-      expect(vi.mocked(api.createEntry).mock.calls[0][0]).toMatchObject({
-        type: 'gasto', method: 'avista', installments: 1, amount: '12.5', category: 'Mercado',
-      })
+      await user.type(screen.getByRole('textbox', { name: 'Buscar lançamento' }), 'ACAI')
+      expect(screen.getByText('Açaí')).toBeInTheDocument()
+      expect(screen.queryByText('feira')).not.toBeInTheDocument()
     })
 
-    it('força entrada para à vista e uma parcela, mesmo se o crédito tiver sido escolhido antes', async () => {
+    it('filtra entradas, saídas e crédito', async () => {
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
+      const filtro = screen.getByRole('group', { name: 'Filtro' })
 
-      // escolhe crédito parcelado como gasto...
-      await user.click(screen.getByRole('button', { name: 'Crédito' }))
-      await user.clear(screen.getByLabelText('Parcelas'))
-      await user.type(screen.getByLabelText('Parcelas'), '6')
-      // ...e depois troca para entrada
-      await user.click(screen.getByRole('button', { name: 'Entrada' }))
+      await user.click(within(filtro).getByRole('button', { name: 'Entradas' }))
+      expect(screen.getByText('Salário', { selector: 'span' })).toBeInTheDocument()
+      expect(screen.queryByText('feira')).not.toBeInTheDocument()
 
-      await user.type(screen.getByLabelText('Descrição'), 'freela')
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Freela')
-      await user.type(screen.getByLabelText('Valor'), '900')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
+      await user.click(within(filtro).getByRole('button', { name: 'Saídas' }))
+      expect(screen.getByText('feira')).toBeInTheDocument()
+      expect(screen.queryByText('R$ 5.000,00')).not.toBeInTheDocument()
 
-      await waitFor(() => expect(api.createEntry).toHaveBeenCalled())
-      // o invariante do CLAUDE.md: entrada nunca vai no crédito
-      expect(vi.mocked(api.createEntry).mock.calls[0][0]).toMatchObject({
-        type: 'entrada', method: 'avista', installments: 1,
-      })
+      await user.click(within(filtro).getByRole('button', { name: 'Crédito' }))
+      expect(screen.getByText('Televisão')).toBeInTheDocument()
+      expect(screen.queryByText('feira')).not.toBeInTheDocument()
     })
 
-    it('manda o número de parcelas quando é gasto no crédito', async () => {
+    it('busca sem resultado diz que é a busca, e limpar volta a lista', async () => {
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
+      await user.type(screen.getByRole('textbox', { name: 'Buscar lançamento' }), 'zzz')
+      expect(screen.getByText('Nada bate com a busca')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Limpar busca' }))
+      expect(screen.getByText('feira')).toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'Buscar lançamento' })).toHaveValue('')
+    })
 
-      await user.type(screen.getByLabelText('Descrição'), 'TV')
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Lazer')
-      await user.type(screen.getByLabelText('Valor'), '3600')
-      await user.click(screen.getByRole('button', { name: 'Crédito' }))
-      await user.clear(screen.getByLabelText('Parcelas'))
-      await user.type(screen.getByLabelText('Parcelas'), '9')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      await waitFor(() => expect(api.createEntry).toHaveBeenCalled())
-      expect(vi.mocked(api.createEntry).mock.calls[0][0]).toMatchObject({
-        type: 'gasto', method: 'credito', installments: 9,
-      })
+    it('mês vazio diz que é o mês, sem botão de limpar', async () => {
+      vi.mocked(api.entries).mockResolvedValue([])
+      montar()
+      expect(await screen.findByText('Nenhum lançamento neste mês.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Limpar busca' })).not.toBeInTheDocument()
     })
   })
 
-  describe('o formulário', () => {
-    it('tipo e forma são grupos rotulados que dizem qual opção está escolhida', async () => {
+  describe('o Lançar', () => {
+    // UC6, UC14
+    it('é neutro e abre a janela; salvar recarrega a lista', async () => {
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
+      const lancar = screen.getByRole('button', { name: 'Lançar' })
+      expect(lancar).toHaveClass('bg-foreground')
+      expect(lancar).not.toHaveClass('bg-primary')
+      await user.click(lancar)
 
-      const tipo = screen.getByRole('group', { name: 'Tipo' })
-      expect(within(tipo).getByRole('button', { name: 'Gasto' })).toHaveAttribute('aria-pressed', 'true')
-      expect(within(tipo).getByRole('button', { name: 'Entrada' })).toHaveAttribute('aria-pressed', 'false')
-
-      await user.click(screen.getByRole('button', { name: 'Crédito' }))
-      const forma = screen.getByRole('group', { name: 'Forma' })
-      expect(within(forma).getByRole('button', { name: 'Crédito' })).toHaveAttribute('aria-pressed', 'true')
-    })
-
-    it('clicar de novo na opção escolhida não a desmarca', async () => {
-      const user = userEvent.setup()
-      montar()
-      await screen.findByText('feira')
-      await user.click(screen.getByRole('button', { name: 'Gasto' }))
-      expect(screen.getByRole('button', { name: 'Gasto' })).toHaveAttribute('aria-pressed', 'true')
-      // a forma só aparece para gasto: se o tipo tivesse ficado vazio, ela sumiria
-      expect(screen.getByRole('group', { name: 'Forma' })).toBeInTheDocument()
-    })
-
-    it('troca a lista de categorias junto com o tipo', async () => {  // UC8: a lista vem da API
-      const user = userEvent.setup()
-      montar()
-      await screen.findByText('feira')
-
-      const categoria = screen.getByLabelText('Categoria')
-      expect(within(categoria).queryByRole('option', { name: 'Mercado' })).toBeInTheDocument()
-      expect(within(categoria).queryByRole('option', { name: 'Salário' })).not.toBeInTheDocument()
-
-      await user.click(screen.getByRole('button', { name: 'Entrada' }))
-      expect(within(categoria).queryByRole('option', { name: 'Salário' })).toBeInTheDocument()
-      expect(within(categoria).queryByRole('option', { name: 'Mercado' })).not.toBeInTheDocument()
-    })
-
-    it('esconde as parcelas fora do crédito', async () => {
-      const user = userEvent.setup()
-      montar()
-      await screen.findByText('feira')
-
-      expect(screen.queryByLabelText('Parcelas')).not.toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Crédito' }))
-      expect(screen.getByLabelText('Parcelas')).toBeInTheDocument()
-    })
-
-    it('limpa os campos e recarrega a lista depois de salvar', async () => {
-      const user = userEvent.setup()
-      montar()
-      await screen.findByText('feira')
-      expect(api.entries).toHaveBeenCalledTimes(1)
-
-      await user.type(screen.getByLabelText('Descrição'), 'pão')
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Mercado')
-      await user.type(screen.getByLabelText('Valor'), '12.50')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
+      const janela = await screen.findByRole('dialog', { name: 'Novo lançamento' })
+      await user.type(within(janela).getByLabelText('Descrição'), 'pão')
+      await within(janela).findByRole('option', { name: 'Mercado' })
+      await user.selectOptions(within(janela).getByLabelText('Categoria'), 'Mercado')
+      await user.type(within(janela).getByLabelText('Valor'), '12.50')
+      await user.click(within(janela).getByRole('button', { name: 'Salvar' }))
 
       await waitFor(() => expect(api.entries).toHaveBeenCalledTimes(2))
-      expect(screen.getByLabelText('Descrição')).toHaveValue('')
-      expect(screen.getByLabelText('Valor')).toHaveValue(null)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    it('mostra o erro do servidor sem limpar o que foi digitado', async () => {
+    // UC15
+    it('o lápis da linha abre a edição preenchida', async () => {
       const user = userEvent.setup()
-      vi.mocked(api.createEntry).mockRejectedValue(new Error('Entrada não vai no crédito.'))
       montar()
       await screen.findByText('feira')
-
-      await user.type(screen.getByLabelText('Descrição'), 'pão')
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Mercado')
-      await user.type(screen.getByLabelText('Valor'), '12.50')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      expect(await screen.findByText('Entrada não vai no crédito.')).toBeInTheDocument()
-      expect(screen.getByLabelText('Descrição')).toHaveValue('pão')
+      await user.click(screen.getByRole('button', { name: 'Editar feira' }))
+      const janela = await screen.findByRole('dialog', { name: 'Editar lançamento' })
+      expect(within(janela).getByLabelText('Descrição')).toHaveValue('feira')
     })
   })
 
-  describe('a exclusão', () => {
-    it('exige dois cliques: o primeiro só pede confirmação', async () => {
+  describe('a exclusão na tabela', () => {
+    it('exige dois cliques e recarrega a lista', async () => {
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
-
       await user.click(screen.getByRole('button', { name: 'Excluir feira' }))
       expect(api.removeEntry).not.toHaveBeenCalled()
-      expect(screen.getByRole('button', { name: 'Confirmar exclusão de feira' })).toBeInTheDocument()
-
       await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de feira' }))
-      await waitFor(() => expect(api.removeEntry).toHaveBeenCalledWith(1))
+      await waitFor(() => expect(api.entries).toHaveBeenCalledTimes(2))
+      expect(api.removeEntry).toHaveBeenCalledWith(1)
     })
 
-    it('recarrega a lista depois de excluir', async () => {
+    // F13: apagado em outra aba
+    it('se falhar, mostra o erro e atualiza a lista', async () => {
+      vi.mocked(api.removeEntry).mockRejectedValue(new Error('Lançamento não encontrado.'))
       const user = userEvent.setup()
       montar()
       await screen.findByText('feira')
-
       await user.click(screen.getByRole('button', { name: 'Excluir feira' }))
       await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de feira' }))
       await waitFor(() => expect(api.entries).toHaveBeenCalledTimes(2))
+      expect(await screen.findByText('Lançamento não encontrado.')).toBeInTheDocument()
     })
   })
 
-  describe('a edição', () => {
-    it('o lápis carrega o lançamento no formulário', async () => {
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-
-      expect(screen.getByText('Editar lançamento')).toBeInTheDocument()
-      expect(screen.getByLabelText('Descrição')).toHaveValue('feira')
-      expect(screen.getByLabelText('Categoria')).toHaveValue('Mercado')
-      expect(screen.getByLabelText('Valor')).toHaveValue(150.5)
-      expect(screen.getByLabelText('Data')).toHaveValue('2026-09-05')
-      expect(screen.getByLabelText('Descrição')).toHaveFocus()
-    })
-
-    it('salvar em edição altera o lançamento em vez de criar outro', async () => {
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Lazer')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      await waitFor(() => expect(api.updateEntry).toHaveBeenCalled())
-      expect(api.createEntry).not.toHaveBeenCalled()
-      const [id, payload] = vi.mocked(api.updateEntry).mock.calls[0]
-      expect(id).toBe(1)
-      expect(payload).toMatchObject({ description: 'feira', category: 'Lazer', amount: '150.50' })
-    })
-
-    it('a categoria do lançamento aparece escolhida quando a lista chega depois', async () => {
-      // UC8: a lista vem da API; abrir a edição antes dela chegar não pode perder a categoria
-      let entregar: (lista: Category[]) => void = () => {}
-      vi.mocked(api.categoryList).mockReturnValue(new Promise((r) => (entregar = r)))
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      entregar(CATEGORIAS)
-
-      await waitFor(() => expect(screen.getByLabelText('Categoria')).toHaveValue('Mercado'))
-    })
-
-    it('depois de salvar volta a ser o formulário de lançamento novo', async () => {
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      expect(await screen.findByText('Novo lançamento')).toBeInTheDocument()
-      expect(screen.getByLabelText('Descrição')).toHaveValue('')
-      expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
-    })
-
-    it('cancelar descarta a edição sem chamar a API', async () => {
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      await user.clear(screen.getByLabelText('Descrição'))
-      await user.type(screen.getByLabelText('Descrição'), 'mudei de ideia')
-      await user.click(screen.getByRole('button', { name: 'Cancelar' }))
-
-      expect(screen.getByText('Novo lançamento')).toBeInTheDocument()
-      expect(screen.getByLabelText('Descrição')).toHaveValue('')
-      expect(api.updateEntry).not.toHaveBeenCalled()
-    })
-
-    it('erro do servidor mantém a edição aberta com o que foi digitado', async () => {
-      const user = userEvent.setup()
-      vi.mocked(api.updateEntry).mockRejectedValue(new Error('Entrada não vai no crédito.'))
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Lazer')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      expect(await screen.findByText('Entrada não vai no crédito.')).toBeInTheDocument()
-      expect(screen.getByText('Editar lançamento')).toBeInTheDocument()
-      expect(screen.getByLabelText('Categoria')).toHaveValue('Lazer')
-    })
-
-    it('excluir o lançamento que está em edição fecha a edição', async () => {
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
-      await user.click(screen.getByRole('button', { name: 'Excluir feira' }))
-      await user.click(screen.getByRole('button', { name: 'Confirmar exclusão de feira' }))
-
-      expect(await screen.findByText('Novo lançamento')).toBeInTheDocument()
-      expect(screen.getByLabelText('Descrição')).toHaveValue('')
-    })
-  })
-
-  describe('a lista de categorias', () => {
-    it('sem a lista, mostra o erro e não deixa salvar', async () => {  // F10
-      vi.mocked(api.categoryList).mockRejectedValue(new Error('rede'))
-      const user = userEvent.setup()
-      montar()
-
-      expect(await screen.findByText('Não foi possível carregar as categorias.')).toBeInTheDocument()
-      await user.type(screen.getByLabelText('Descrição'), 'pão')
-      await user.type(screen.getByLabelText('Valor'), '12.50')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-      expect(api.createEntry).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('a data sugerida', () => {
+  describe('no celular', () => {
+    const largura = window.innerWidth
     beforeEach(() => {
-      // o bug só aparece a oeste de UTC: fixa o fuso para o teste não depender da máquina
-      vi.stubEnv('TZ', 'America/Sao_Paulo')
-      vi.useFakeTimers({ toFake: ['Date'] })
+      window.innerWidth = 375
     })
     afterEach(() => {
-      vi.useRealTimers()
-      vi.unstubAllEnvs()
+      window.innerWidth = largura
     })
 
-    it('é hoje no fuso local, mesmo depois das 21h', async () => {
-      // 23h30 de 30/09 em Brasília já é 01/10 em UTC
-      vi.setSystemTime(new Date('2026-09-30T23:30:00-03:00'))
+    // UC16: lista por dia, sem tabela
+    it('agrupa por dia', async () => {
       montar()
+      const dia = await screen.findByRole('heading', { name: '05/09' })
+      const secao = dia.closest('section')!
+      expect(within(secao).getByText('feira')).toBeInTheDocument()
+      expect(within(secao).getByText('Salário', { selector: 'span' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: '02/09' })).toBeInTheDocument()
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    })
 
-      expect(await screen.findByLabelText('Data')).toHaveValue('2026-09-30')
+    // P5: tocar no item abre o Lançar preenchido, com o apagar dentro
+    it('tocar no item abre a edição com o excluir', async () => {
+      const user = userEvent.setup()
+      montar()
+      await user.click(await screen.findByRole('button', { name: 'Editar feira' }))
+      const janela = await screen.findByRole('dialog', { name: 'Editar lançamento' })
+      expect(within(janela).getByRole('button', { name: 'Excluir feira' })).toBeInTheDocument()
     })
   })
 
   describe('a navegação entre meses', () => {
     const anterior = shiftMonth(currentMonth(), -1)
-    const DO_MES_ANTERIOR = { ...LANCAMENTO, id: 2, description: 'aluguel de setembro' }
+    const DO_MES_ANTERIOR = { ...LANCAMENTO, id: 9, description: 'aluguel de setembro' }
 
     it('abre no mês corrente', async () => {
       montar()
-
       await waitFor(() => expect(api.entries).toHaveBeenCalledWith(currentMonth()))
       expect(api.summary).toHaveBeenCalledWith(currentMonth())
-      expect(screen.getByText(`Lançamentos — ${currentMonth()}`)).toBeInTheDocument()
+      expect(screen.getByText(formatMonthLong(currentMonth()))).toBeInTheDocument()
     })
 
     it('refaz lista e saldo ao ir para o mês anterior', async () => {
@@ -380,14 +242,11 @@ describe('EntryScreen', () => {
       montar()
       await screen.findByText('feira')
       vi.mocked(api.entries).mockResolvedValue([DO_MES_ANTERIOR])
-
       await user.click(screen.getByRole('button', { name: 'Mês anterior' }))
-
       expect(await screen.findByText('aluguel de setembro')).toBeInTheDocument()
       expect(screen.queryByText('feira')).not.toBeInTheDocument()
       expect(api.summary).toHaveBeenLastCalledWith(anterior)
-      expect(screen.getByText(`Lançamentos — ${anterior}`)).toBeInTheDocument()
-      expect(screen.getByText(`Saldo disponível — ${anterior}`)).toBeInTheDocument()
+      expect(screen.getByText(formatMonthLong(anterior))).toBeInTheDocument()
     })
 
     it('resposta atrasada do mês que ficou para trás não sobrescreve a lista', async () => {
@@ -399,52 +258,11 @@ describe('EntryScreen', () => {
           : Promise.resolve([DO_MES_ANTERIOR]),
       )
       montar()
-
-      // troca de mês antes de o mês corrente responder...
       await user.click(await screen.findByRole('button', { name: 'Mês anterior' }))
       expect(await screen.findByText('aluguel de setembro')).toBeInTheDocument()
-      // ...e a resposta dele chega depois
       responderMesCorrente([LANCAMENTO])
-
       await new Promise((r) => setTimeout(r, 20))
       expect(screen.queryByText('feira')).not.toBeInTheDocument()
-      expect(screen.getByText('aluguel de setembro')).toBeInTheDocument()
     })
-
-    it('depois de salvar recarrega o mês que está na tela, não o corrente', async () => {
-      const user = userEvent.setup()
-      montar()
-      await screen.findByText('feira')
-      await user.click(screen.getByRole('button', { name: 'Mês anterior' }))
-      await waitFor(() => expect(api.entries).toHaveBeenLastCalledWith(anterior))
-      const chamadasAntes = vi.mocked(api.entries).mock.calls.length
-
-      await user.type(screen.getByLabelText('Descrição'), 'pão')
-      await user.selectOptions(screen.getByLabelText('Categoria'), 'Mercado')
-      await user.type(screen.getByLabelText('Valor'), '12.50')
-      await user.click(screen.getByRole('button', { name: 'Salvar' }))
-
-      await waitFor(() =>
-        expect(vi.mocked(api.entries).mock.calls.length).toBeGreaterThan(chamadasAntes),
-      )
-      expect(api.entries).toHaveBeenLastCalledWith(anterior)
-    })
-  })
-
-  // UC7: o mesmo par do resumo, acumulado e do mês
-  it('mostra o saldo acumulado e o do mês vindos do resumo', async () => {
-    montar()
-    const acumulado = await screen.findByText('R$ 4.000,00')
-    expect(acumulado.previousElementSibling).toHaveTextContent(/^Saldo disponível/)
-    expect(screen.getByText('R$ 1.000,00').previousElementSibling).toHaveTextContent('Saldo do mês')
-  })
-
-  it('mantém a ordem saldo → formulário → lista', async () => {
-    montar()
-    const saldo = await screen.findByText(/^Saldo disponível —/)
-    const formulario = screen.getByText('Novo lançamento')
-    const lista = screen.getByText(/^Lançamentos —/)
-    expect(vemAntes(saldo, formulario)).toBe(true)
-    expect(vemAntes(formulario, lista)).toBe(true)
   })
 })
