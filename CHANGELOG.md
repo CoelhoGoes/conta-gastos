@@ -75,6 +75,8 @@ e o versionamento tenta seguir [SemVer](https://semver.org/lang/pt-BR/).
   R$ 9.999.999.999,99, que dava erro inesperado, agora é recusado assim
 - Trocar de mês rápido na tela de fatura podia deixar na tela as parcelas do mês anterior,
   quando a resposta dele chegava depois da do mês escolhido
+- Com o servidor atrás de um proxy, errar a senha de uma conta várias vezes bloqueava o login
+  dela para todo mundo, e não só para quem errou
 
 ## [0.1.0] - 2026-10-02
 
