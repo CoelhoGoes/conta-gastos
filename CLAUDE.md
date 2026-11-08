@@ -171,6 +171,7 @@ frontend/
                                / formatMonthShort() / formatDayMonth()
 docs/dominio.md               business rules in prose
 docs/features/                one doc per feature, opened at step 1 of the skills flow
+mocks/                        Mockoon environment — empty for now, see docs/roadmap.md
 docker-compose.yml            repo root
 .env.example                  repo root (backend vars only)
 ```

@@ -44,6 +44,9 @@ Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do 
 - [ ] Limite de tamanho de corpo no servidor (uvicorn ou proxy) antes do deploy: o 413 do
       upload de OFX só dispara depois que o corpo inteiro chegou — limita a memória do
       processo, não o tráfego
+- [ ] Montar em `mocks/` um ambiente do Mockoon com as rotas da API, para rodar o frontend sem
+      o backend. Falta decidir a fonte das respostas: extrair dos `vi.mock` dos testes do
+      frontend (parciais — cada teste só preenche o que usa) ou gerar do OpenAPI da API
 
 ## Manutenção
 
