@@ -729,6 +729,24 @@ class TestImportacao:
 
         assert r.status_code == 413
 
+    def test_corpo_acima_do_limite_e_recusado_pelo_cabecalho_com_cors(self, client, auth):
+        from app.main import MAX_BODY_BYTES
+
+        headers = {**auth(), "Origin": "http://localhost:5173"}
+        r = self.enviar(client, headers, b"x" * (MAX_BODY_BYTES + 1))
+
+        assert r.status_code == 413
+        assert "Requisição maior" in r.json()["detail"]
+        # sem isto o navegador esconde o 413 e a tela mostra erro de rede
+        assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+    def test_corpo_em_chunks_sem_tamanho_e_recusado(self, client, auth):
+        r = client.post(
+            "/imports", headers=auth(), content=iter([b"[", b"]"])
+        )
+
+        assert r.status_code == 411
+
     def test_confirmacao_grava_os_lancamentos(self, client, auth):
         headers = auth()
         linhas = self.enviar(

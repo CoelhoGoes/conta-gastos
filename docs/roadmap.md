@@ -40,10 +40,8 @@ Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do 
 - [ ] Avaliar se o próprio usuário pode criar categorias personalizadas, além das listas fechadas.
       Viabilidade ainda não avaliada. Ficou de fora da validação da categoria no servidor,
       01/11/2026 — que criou a tabela `categorias`, hoje global (sem `usuario_id`)
-- [ ] Deploy: backend em Railway / Render / Fly.io; frontend na Vercel
-- [ ] Limite de tamanho de corpo no servidor (uvicorn ou proxy) antes do deploy: o 413 do
-      upload de OFX só dispara depois que o corpo inteiro chegou — limita a memória do
-      processo, não o tráfego
+- [ ] Deploy: API no Render (grátis, lê o `backend/Dockerfile`), Postgres no Neon (grátis),
+      frontend na Vercel. Combinado em 08/11/2026, aceitando o cold start dos planos grátis
 - [ ] Montar em `mocks/` um ambiente do Mockoon com as rotas da API, para rodar o frontend sem
       o backend. Falta decidir a fonte das respostas: extrair dos `vi.mock` dos testes do
       frontend (parciais — cada teste só preenche o que usa) ou gerar do OpenAPI da API
