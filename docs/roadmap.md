@@ -40,9 +40,9 @@ Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do 
 - [ ] Avaliar se o próprio usuário pode criar categorias personalizadas, além das listas fechadas.
       Viabilidade ainda não avaliada. Ficou de fora da validação da categoria no servidor,
       01/11/2026 — que criou a tabela `categorias`, hoje global (sem `usuario_id`)
-- [ ] Deploy: frontend no Firebase Hosting, API no Cloud Run (lê o `backend/Dockerfile`, no
-      máximo 1 instância), Postgres no Neon (grátis). Combinado em 09/11/2026, aceitando o cold
-      start; o Cloud Run pede o plano Blaze, com cartão, mesmo dentro da cota grátis
+- [ ] Deploy: frontend no Firebase Hosting (plano Spark), API no Render (grátis, lê o
+      `backend/Dockerfile`), Postgres no Neon (grátis). Combinado em 09/11/2026, aceitando o cold
+      start; o Cloud Run saiu porque o plano Blaze recusou o cartão
 - [ ] Montar em `mocks/` um ambiente do Mockoon com as rotas da API, para rodar o frontend sem
       o backend. Falta decidir a fonte das respostas: extrair dos `vi.mock` dos testes do
       frontend (parciais — cada teste só preenche o que usa) ou gerar do OpenAPI da API

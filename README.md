@@ -313,10 +313,12 @@ O frontend vai para o Firebase Hosting (`firebase deploy --only hosting`, da rai
 no ambiente do build — e manda toda rota para o `index.html`: sem isso, recarregar `/fatura`
 dá 404, porque o roteamento é do `BrowserRouter`.
 
-O plano combinado em 09/11/2026: frontend no Firebase Hosting, API no Cloud Run (lê o
-`backend/Dockerfile`; porta do container 8000 e **no máximo 1 instância**, porque o limitador
-de login vive em memória) e Postgres no Neon. A string do Neon é a conexão direta, não a
-"pooled", começando com `postgresql+psycopg://` e com `?sslmode=require`. Front e API ficam em
+O plano combinado em 09/11/2026, todo em planos grátis e sem cartão: frontend no Firebase
+Hosting (plano Spark), API no Render (Web Service grátis, Root Directory `backend`, runtime
+Docker, `PORT=8000`; uma instância só, que é o que o limitador de login em memória pede) e
+Postgres no Neon. O Cloud Run ficou de fora porque exige o plano Blaze, com cartão. A string
+do Neon é a conexão direta, não a "pooled", começando com `postgresql+psycopg://` e com
+`?sslmode=require`. Front e API ficam em
 domínios separados: `ALLOWED_ORIGINS` recebe o `*.web.app` do Hosting.
 
 A API recusa pelo cabeçalho, antes de ler, corpo acima de 4 MB (413) e corpo em chunks sem
