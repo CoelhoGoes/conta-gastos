@@ -123,6 +123,7 @@ backend/
 frontend/
 ├── components.json           shadcn config — aliases point into src/presentation/
 ├── vite.config.ts            React + Tailwind v4 plugins, '@' alias → ./src
+├── vercel.json               SPA rewrite: every route serves index.html on Vercel
 └── src/                      layered: presentation → state → data, shared for all
     ├── main.tsx               mounts App inside BrowserRouter + AuthProvider
     ├── App.tsx                route table only (login/summary/entries/invoice/income/import/config)
@@ -217,7 +218,7 @@ npm run gen:types  # regenerate src/shared/api-schema.d.ts from the running API
 
 ```bash
 pip install -r backend/requirements-dev.txt   # once
-cd backend && pytest                          # 251 tests (8 skipped on sqlite), ~35s
+cd backend && pytest                          # 253 tests (8 skipped on sqlite), ~35s
 
 cd frontend && npm test                       # 183 tests, ~9s
 ```

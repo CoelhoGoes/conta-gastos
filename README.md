@@ -156,7 +156,7 @@ cd frontend && npx -y knip                    # código e dependências sem uso 
 
 ```bash
 pip install -r backend/requirements-dev.txt   # uma vez
-cd backend && pytest                          # 251 testes (8 pulados em sqlite), ~35s
+cd backend && pytest                          # 253 testes (8 pulados em sqlite), ~35s
 
 cd frontend && npm test                       # 183 testes, ~9s
 ```
@@ -188,7 +188,7 @@ backend/
 │   ├── test_api.py        contrato HTTP, em sqlite ou Postgres
 │   └── test_migrations.py migrações batem com os modelos — só em Postgres
 └── app/                   em camadas: api → domain → infra (veja Arquitetura abaixo)
-    ├── main.py            entrada, CORS, registro dos routers, /health
+    ├── main.py            entrada, CORS, limite de corpo, registro dos routers, /health
     ├── api/               HTTP: rotas, contratos e dependências do FastAPI
     │   ├── auth.py        /auth/*
     │   ├── finance.py     /entries, /categories, /summary, /invoices, /trend, /imports
@@ -309,6 +309,13 @@ O `docker-compose.yml` sobe tudo em qualquer VPS com Docker. Em hospedagem geren
 (Railway, Render, Fly.io), o `backend/Dockerfile` é lido direto e o Postgres é do provedor —
 nesse caso você troca `DATABASE_URL` pela string deles e não usa o serviço `db` do compose.
 O frontend vai para Vercel ou equivalente, com `VITE_API_URL` apontando para a API publicada.
+O `frontend/vercel.json` manda toda rota para o `index.html`: sem ele, recarregar `/fatura`
+na Vercel dá 404, porque o roteamento é do `BrowserRouter`.
+
+A API recusa pelo cabeçalho, antes de ler, corpo acima de 4 MB (413) e corpo em chunks sem
+`Content-Length` (411). Atrás do proxy da hospedagem, o uvicorn sobe com
+`--forwarded-allow-ips='*'` para o limitador de login contar pelo IP real — por isso a API não
+pode ficar acessível sem passar pelo proxy.
 
 Antes de expor na internet:
 
