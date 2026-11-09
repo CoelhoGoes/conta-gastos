@@ -16,3 +16,6 @@ skills-lock.json
 # extratos bancários — nunca versionar, nem de exemplo
 *.ofx
 *.OFX
+
+# cache do firebase deploy
+.firebase/

@@ -123,7 +123,6 @@ backend/
 frontend/
 ├── components.json           shadcn config — aliases point into src/presentation/
 ├── vite.config.ts            React + Tailwind v4 plugins, '@' alias → ./src
-├── vercel.json               SPA rewrite: every route serves index.html on Vercel
 └── src/                      layered: presentation → state → data, shared for all
     ├── main.tsx               mounts App inside BrowserRouter + AuthProvider
     ├── App.tsx                route table only (login/summary/entries/invoice/income/import/config)
@@ -174,6 +173,7 @@ docs/dominio.md               business rules in prose
 docs/features/                one doc per feature, opened at step 1 of the skills flow
 mocks/                        Mockoon environment — empty for now, see docs/roadmap.md
 docker-compose.yml            repo root
+firebase.json                 Firebase Hosting: publishes frontend/dist, every route serves index.html
 .env.example                  repo root (backend vars only)
 ```
 
