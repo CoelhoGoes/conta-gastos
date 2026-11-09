@@ -40,9 +40,11 @@ Na ordem combinada em 02/10/2026: proteger o que já existe, produto, saúde do 
 - [ ] Avaliar se o próprio usuário pode criar categorias personalizadas, além das listas fechadas.
       Viabilidade ainda não avaliada. Ficou de fora da validação da categoria no servidor,
       01/11/2026 — que criou a tabela `categorias`, hoje global (sem `usuario_id`)
-- [ ] Deploy: frontend no Firebase Hosting (plano Spark), API no Render (grátis, lê o
-      `backend/Dockerfile`), Postgres no Neon (grátis). Combinado em 09/11/2026, aceitando o cold
-      start; o Cloud Run saiu porque o plano Blaze recusou o cartão
+- [ ] Batizar o projeto de **Conta-Gastos** de forma uniforme. Nome escolhido em 09/11/2026, ao
+      criar o projeto no Firebase; hoje o app ainda se chama "Gestão Financeira" (título da API
+      em `backend/app/main.py`, README, CLAUDE.md, telas). O repositório no GitHub já virou
+      `CoelhoGoes/conta-gastos` em 09/11/2026; a pasta local e o arquivo do Figma ainda têm o nome
+      antigo. Falta levantar onde o nome aparece e decidir o que muda
 - [ ] Montar em `mocks/` um ambiente do Mockoon com as rotas da API, para rodar o frontend sem
       o backend. Falta decidir a fonte das respostas: extrair dos `vi.mock` dos testes do
       frontend (parciais — cada teste só preenche o que usa) ou gerar do OpenAPI da API

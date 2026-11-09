@@ -174,6 +174,7 @@ docs/features/                one doc per feature, opened at step 1 of the skill
 mocks/                        Mockoon environment — empty for now, see docs/roadmap.md
 docker-compose.yml            repo root
 firebase.json                 Firebase Hosting: publishes frontend/dist, every route serves index.html
+.firebaserc                   default Firebase project: conta-gastos
 .env.example                  repo root (backend vars only)
 ```
 

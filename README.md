@@ -308,7 +308,14 @@ No frontend, converta com `Number(valor)` antes de formatar ou somar.
 O `docker-compose.yml` sobe tudo em qualquer VPS com Docker. Em hospedagem gerenciada
 (Railway, Render, Fly.io), o `backend/Dockerfile` é lido direto e o Postgres é do provedor —
 nesse caso você troca `DATABASE_URL` pela string deles e não usa o serviço `db` do compose.
-O frontend vai para o Firebase Hosting (`firebase deploy --only hosting`, da raiz). O
+O frontend vai para o Firebase Hosting, da raiz (o `.firebaserc` aponta para o projeto
+`conta-gastos`):
+
+```bash
+VITE_API_URL=https://conta-gastos.onrender.com npx firebase-tools deploy --only hosting
+```
+
+No ar em `https://conta-gastos.web.app`, com a API em `https://conta-gastos.onrender.com`. O
 `firebase.json` builda o frontend antes de publicar — com `VITE_API_URL` apontando para a API
 no ambiente do build — e manda toda rota para o `index.html`: sem isso, recarregar `/fatura`
 dá 404, porque o roteamento é do `BrowserRouter`.
@@ -318,8 +325,9 @@ Hosting (plano Spark), API no Render (Web Service grátis, Root Directory `backe
 Docker, `PORT=8000`; uma instância só, que é o que o limitador de login em memória pede) e
 Postgres no Neon. O Cloud Run ficou de fora porque exige o plano Blaze, com cartão. A string
 do Neon é a conexão direta, não a "pooled", começando com `postgresql+psycopg://` e com
-`?sslmode=require`. Front e API ficam em
-domínios separados: `ALLOWED_ORIGINS` recebe o `*.web.app` do Hosting.
+`?sslmode=require`. API (Render) e banco (Neon) ficam ambos na Virgínia (US East): o Render
+não tem região na América do Sul, e cada consulta ao banco atravessaria o continente. Front e
+API ficam em domínios separados: `ALLOWED_ORIGINS` recebe o `*.web.app` do Hosting.
 
 A API recusa pelo cabeçalho, antes de ler, corpo acima de 4 MB (413) e corpo em chunks sem
 `Content-Length` (411). Atrás do proxy da hospedagem, o uvicorn sobe com

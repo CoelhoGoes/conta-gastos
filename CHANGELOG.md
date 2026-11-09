@@ -8,6 +8,8 @@ e o versionamento tenta seguir [SemVer](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Adicionado
+- O app está publicado em https://conta-gastos.web.app: dá para usar no navegador do
+  celular ou do computador, sem rodar nada localmente
 - Excluir a própria conta em Configurações, confirmando com a senha. A conta para de
   funcionar na hora e o e-mail fica livre para um cadastro novo; os dados não são apagados
   do servidor, só deixam de ser acessíveis
